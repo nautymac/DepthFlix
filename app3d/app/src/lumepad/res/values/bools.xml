@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 기기별 값. Panel.java 등 공용 코드가 두 플레이버(lumepad/redmagic)에서
+         그대로 컴파일되므로, 기기마다 다른 값은 자바 코드가 아니라 여기 리소스에
+         둔다. -->
+
+    <!-- Lume Pad 2 는 3D 모드에서 균일 백라이트를 끄고 회절 광원만 쓰기 때문에
+         2D보다 어둡고, 적응형 밝기가 겹치면 더 내려간다(실측: 시스템 설정 252가
+         적응형 때문에 203까지 내려감) — 그래서 재생 중 창 밝기를 최대로 강제한다.
+         RedMagic 에서도 같은 문제가 있는지는 아직 실기로 비교 중. -->
+    <bool name="force_max_brightness">true</bool>
+</resources>

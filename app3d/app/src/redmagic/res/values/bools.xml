@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 기기별 값. Panel.java 등 공용 코드가 두 플레이버(lumepad/redmagic)에서
+         그대로 컴파일되므로, 기기마다 다른 값은 자바 코드가 아니라 여기 리소스에
+         둔다. -->
+
+    <!-- 2026-09-15: RedMagic 에서 Lume Pad 2 용 밝기 강제(force_max_brightness)가
+         실제로 필요한지 비교해보려고 우선 꺼둔다 — 켠 버전/끈 버전을 실기에서
+         비교한 뒤 결정할 것. -->
+    <bool name="force_max_brightness">false</bool>
+</resources>

@@ -164,15 +164,20 @@ public class PlayerActivity extends Activity
             return;
         }
 
-        // 재생 중에는 창 밝기를 최대로 고정한다.
+        // 재생 중에는 창 밝기를 최대로 고정한다 — 기기별로 켜고 끌 수 있다
+        // (R.bool.force_max_brightness, 플레이버별 res/values/bools.xml).
         //
         // Lume Pad 2 의 3D 모드는 균일 백라이트를 완전히 끄고(mode3d_ratio_2d = 0.0)
         // 회절 광원만 쓰기 때문에 같은 설정값에서도 2D 보다 어둡다. 거기에 적응형
         // 밝기까지 겹치면 더 내려간다 — 실측으로 시스템 설정은 252 인데 적응형이
         // 203 까지 내려놓고 있었다. 창 속성이라 이 화면을 벗어나면 저절로 풀린다.
-        WindowManager.LayoutParams wlp = getWindow().getAttributes();
-        wlp.screenBrightness = 1.0f;
-        getWindow().setAttributes(wlp);
+        // RedMagic 에서도 같은 문제가 있는지는 아직 실기로 비교 중이라, 켠 버전과
+        // 끈 버전을 각각 만들어 비교할 수 있게 리소스로 뺐다.
+        if (getResources().getBoolean(R.bool.force_max_brightness)) {
+            WindowManager.LayoutParams wlp = getWindow().getAttributes();
+            wlp.screenBrightness = 1.0f;
+            getWindow().setAttributes(wlp);
+        }
 
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
