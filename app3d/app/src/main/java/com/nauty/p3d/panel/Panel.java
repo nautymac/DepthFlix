@@ -46,7 +46,7 @@ public final class Panel {
 
     private Panel() {}
 
-    private static final class Leia implements PanelBackend, LeiaSDK.Delegate {
+    private static final class Leia implements PanelBackend {
 
         private static final String TAG = "P3DLeia";
 
@@ -156,7 +156,18 @@ public final class Panel {
                 args.platform.activity = a;    // 빠지면 createSDK 가 null 을 준다
                 args.platform.context  = a;    // 마찬가지
                 args.enableFaceTracking = true;
-                args.delegate = this;
+                // LeiaSDK.Delegate 가 커넥터 버전마다 모양이 다르다 — Lume Pad 2(0.6.200)는
+                // 인터페이스, Red Magic(0.10.21)은 추상 클래스다. 이 클래스 하나로 두
+                // 플레이버를 다 빌드해야 해서(app3d/app/build.gradle 참고) implements/
+                // extends 로 직접 이름을 걸 수 없다 — 대신 익명 클래스로 감싼다. new X() {}
+                // 문법은 X 가 인터페이스든 추상 클래스든 똑같이 동작하므로 이 방식은
+                // 어느 쪽 커넥터를 링크하든 그대로 컴파일된다.
+                args.delegate = new LeiaSDK.Delegate() {
+                    @Override public void didInitialize(LeiaSDK s) { Leia.this.didInitialize(s); }
+                    @Override public void onFaceTrackingStarted(LeiaSDK s) { Leia.this.onFaceTrackingStarted(s); }
+                    @Override public void onFaceTrackingStopped(LeiaSDK s) { Leia.this.onFaceTrackingStopped(s); }
+                    @Override public void onFaceTrackingFatalError(LeiaSDK s) { Leia.this.onFaceTrackingFatalError(s); }
+                };
                 sdk = LeiaSDK.createSDK(args);
                 Log.i(TAG, "createSDK -> " + (sdk == null ? "null (실패)" : "ok, 초기화 대기"));
             } catch (Throwable t) {
@@ -348,9 +359,9 @@ public final class Panel {
             } catch (Throwable ignored) { }
         }
 
-        // --- LeiaSDK.Delegate ---
+        // --- LeiaSDK.Delegate 위임 대상 (익명 클래스가 이 메서드들로 넘긴다) ---
 
-        @Override public void didInitialize(LeiaSDK s) {
+        private void didInitialize(LeiaSDK s) {
             // 이전 세션이 백라이트를 3D 로 남긴 채 끊겼을 수 있다.
             //
             // 정상 종료 경로(onPause)는 2D 로 되돌리지만 강제 종료나 비정상 종료는
@@ -409,15 +420,15 @@ public final class Panel {
             }
         };
 
-        @Override public void onFaceTrackingStarted(LeiaSDK s) {
+        private void onFaceTrackingStarted(LeiaSDK s) {
             Log.i(TAG, "얼굴추적 시작");
             tracking = true;
             main.removeCallbacks(fireReady);
             main.postDelayed(fireReady, READY_SETTLE_MS);
         }
 
-        @Override public void onFaceTrackingStopped(LeiaSDK s)    { Log.i(TAG, "얼굴추적 정지"); }
-        @Override public void onFaceTrackingFatalError(LeiaSDK s) { Log.e(TAG, "얼굴추적 오류"); }
+        private void onFaceTrackingStopped(LeiaSDK s)    { Log.i(TAG, "얼굴추적 정지"); }
+        private void onFaceTrackingFatalError(LeiaSDK s) { Log.e(TAG, "얼굴추적 오류"); }
 
         /**
          * 백라이트와 카메라는 시스템 공용이다. 앞에 있을 때만 잡는다 —

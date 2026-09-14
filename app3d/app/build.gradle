@@ -19,6 +19,29 @@ android {
         ndk { abiFilters 'arm64-v8a' }   // 기기가 arm64. libVLC 가 ABI 당 ~30MB 라 하나만 담는다
     }
 
+    flavorDimensions.add("device")
+
+    productFlavors {
+        // Lume Pad 2. Original target — connector is whatever LUMEPAD2-PORT.md's
+        // extraction produced (CNSDK 0.6.200). No suffix: this is the identity the
+        // app has always shipped under, so existing installs keep their data.
+        lumepad {
+            dimension "device"
+        }
+
+        // Red Magic Tablet 3D Explorer Edition (model NP02J, codename K68). Same Leia
+        // lightfield panel family, confirmed working on real hardware, but it ships a
+        // newer CNSDK line on its system services (0.10.40/0.10.18/0.5.50 vs Lume Pad
+        // 2's 0.6.200) and needs its own matching connector — the two are not
+        // interchangeable (LeiaSDK.Delegate itself changed from an interface to an
+        // abstract class between these lines; see Panel.java's anonymous Delegate
+        // for why the shared code has to stay agnostic to that).
+        redmagic {
+            dimension "device"
+            applicationIdSuffix ".redmagic"
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
@@ -91,9 +114,13 @@ dependencies {
     // 직접 읽으려면(YouTube.java) 우리 쪽에서 따로 컴파일 클래스패스에 올려야 한다.
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.11.1'
 
-    // Leia CNSDK — 기기의 com.moonlight.leia APK 에서 꺼낸다. 재배포할 수 없어서
-    // 저장소에 넣지 않았다. 꺼내는 방법은 LUMEPAD2-PORT.md 참고.
-    // 같은 이유로 app/src/main/jniLibs/ 의 libleiaSDK.so, libleiaspdlog.so 와
-    // app/src/main/assets/shaders/ 도 저장소에 없다.
-    implementation files('libs/leia-cnsdk.jar')
+    // Leia CNSDK — 기기별로 다른 커넥터(jar + jniLibs + assets/cnsdk.version)를 쓴다.
+    // lumepad 는 기기의 com.moonlight.leia APK 에서 꺼낸 것(꺼내는 방법은
+    // LUMEPAD2-PORT.md 참고), redmagic 은 그 기기 자체의 ZTE/Leia 순정 앱에서 꺼낸
+    // 것 — 둘 다 재배포할 수 없어서 저장소에 넣지 않았다. 같은 이유로
+    // app/src/<flavor>/jniLibs/ 의 .so 파일들도 저장소에 없다.
+    // app/src/main/assets/shaders/ 는 두 기기가 지금까지는 같은 것을 써서 공용으로
+    // 뒀다 — RedMagic 실기에서 위빙이 이상하면 여기부터 의심할 것.
+    lumepadImplementation fileTree(dir: 'libs/lumepad', include: ['leia-cnsdk*.jar'])
+    redmagicImplementation fileTree(dir: 'libs/redmagic', include: ['leia-cnsdk*.jar'])
 }

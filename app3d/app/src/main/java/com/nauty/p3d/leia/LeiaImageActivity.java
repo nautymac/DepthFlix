@@ -45,7 +45,7 @@ import java.io.File;
  *     --es path /sdcard/Pictures/3dtest_b_depth.png
  * </pre>
  */
-public class LeiaImageActivity extends Activity implements LeiaSDK.Delegate {
+public class LeiaImageActivity extends Activity {
 
     private static final String TAG = "P3DLeia";
 
@@ -135,17 +135,26 @@ public class LeiaImageActivity extends Activity implements LeiaSDK.Delegate {
             args.platform.activity = this;
             args.platform.context  = this;
             args.enableFaceTracking = true;
-            args.delegate = this;
+            // LeiaSDK.Delegate 가 커넥터 버전마다 모양이 다르다(Lume Pad 2 0.6.200 는
+            // 인터페이스, Red Magic 0.10.21 은 추상 클래스) — 이 파일 하나로 두 플레이버를
+            // 다 빌드해야 해서 implements/extends 로 이름을 걸 수 없다. 익명 클래스로
+            // 감싼다 — new X() {} 문법은 X 가 인터페이스든 추상 클래스든 똑같이 동작한다.
+            args.delegate = new LeiaSDK.Delegate() {
+                @Override public void didInitialize(LeiaSDK s) { LeiaImageActivity.this.didInitialize(s); }
+                @Override public void onFaceTrackingStarted(LeiaSDK s) { LeiaImageActivity.this.onFaceTrackingStarted(s); }
+                @Override public void onFaceTrackingStopped(LeiaSDK s) { LeiaImageActivity.this.onFaceTrackingStopped(s); }
+                @Override public void onFaceTrackingFatalError(LeiaSDK s) { LeiaImageActivity.this.onFaceTrackingFatalError(s); }
+            };
             sdk = LeiaSDK.createSDK(args);
         } catch (Throwable t) {
             Log.e(TAG, "createSDK 예외", t);
         }
     }
 
-    @Override public void didInitialize(LeiaSDK s) { ready = true; apply(); }
-    @Override public void onFaceTrackingStarted(LeiaSDK s)    { }
-    @Override public void onFaceTrackingStopped(LeiaSDK s)    { }
-    @Override public void onFaceTrackingFatalError(LeiaSDK s) { Log.e(TAG, "얼굴추적 오류"); }
+    private void didInitialize(LeiaSDK s) { ready = true; apply(); }
+    private void onFaceTrackingStarted(LeiaSDK s)    { }
+    private void onFaceTrackingStopped(LeiaSDK s)    { }
+    private void onFaceTrackingFatalError(LeiaSDK s) { Log.e(TAG, "얼굴추적 오류"); }
 
     private void apply() {
         if (sdk == null || !ready) return;

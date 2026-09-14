@@ -28,8 +28,13 @@ keystore.properties
 # FFmpeg 정적 라이브러리와 헤더 (app3d/ffmpeg/README.md 의 스크립트로 재생성)
 app3d/ffmpeg/src/main/jni/ffmpeg/
 
-# Leia CNSDK — 기기에서 추출한 것이라 재배포 불가. 커밋 금지
-app3d/app/libs/leia-cnsdk.jar
-app3d/app/src/main/jniLibs/
+# Leia CNSDK — 기기에서 추출한 것이라 재배포 불가. 커밋 금지 (lumepad/redmagic 둘 다)
+app3d/app/libs/lumepad/
+app3d/app/libs/redmagic/
+app3d/app/src/lumepad/jniLibs/
+app3d/app/src/lumepad/assets/
+app3d/app/src/redmagic/jniLibs/
+app3d/app/src/redmagic/assets/
+# 버전 교체 전 백업(예: leia-cnsdk-old.jar.bak) — 위와 같은 이유로 커밋 금지
+app3d/app/libs/**/*.bak
 app3d/app/src/main/assets/shaders/
-app3d/app/src/main/assets/cnsdk.version

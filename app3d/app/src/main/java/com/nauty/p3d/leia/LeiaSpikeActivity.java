@@ -44,7 +44,7 @@ import com.nauty.p3d.gl.Stereo3DView;
  * </pre>
  */
 @OptIn(markerClass = UnstableApi.class)
-public class LeiaSpikeActivity extends Activity implements LeiaSDK.Delegate {
+public class LeiaSpikeActivity extends Activity {
 
     private static final String TAG = "P3DLeia";
 
@@ -180,7 +180,16 @@ public class LeiaSpikeActivity extends Activity implements LeiaSDK.Delegate {
             args.platform.activity = this;
             args.platform.context = this;
             args.enableFaceTracking = true;
-            args.delegate = this;
+            // LeiaSDK.Delegate 가 커넥터 버전마다 모양이 다르다(Lume Pad 2 0.6.200 는
+            // 인터페이스, Red Magic 0.10.21 은 추상 클래스) — 이 파일 하나로 두 플레이버를
+            // 다 빌드해야 해서 implements/extends 로 이름을 걸 수 없다. 익명 클래스로
+            // 감싼다 — new X() {} 문법은 X 가 인터페이스든 추상 클래스든 똑같이 동작한다.
+            args.delegate = new LeiaSDK.Delegate() {
+                @Override public void didInitialize(LeiaSDK s) { LeiaSpikeActivity.this.didInitialize(s); }
+                @Override public void onFaceTrackingStarted(LeiaSDK s) { LeiaSpikeActivity.this.onFaceTrackingStarted(s); }
+                @Override public void onFaceTrackingStopped(LeiaSDK s) { LeiaSpikeActivity.this.onFaceTrackingStopped(s); }
+                @Override public void onFaceTrackingFatalError(LeiaSDK s) { LeiaSpikeActivity.this.onFaceTrackingFatalError(s); }
+            };
             sdk = LeiaSDK.createSDK(args);
             Log.i(TAG, "createSDK -> " + (sdk == null ? "null (실패)" : "ok, 초기화 대기"));
         } catch (Throwable t) {
@@ -207,18 +216,17 @@ public class LeiaSpikeActivity extends Activity implements LeiaSDK.Delegate {
         Log.i(TAG, "ExoPlayer 를 3D 파이프라인 입력면에 물렸다");
     }
 
-    // ------------------------------------------------------------ LeiaSDK.Delegate
+    // ------------------------------------------------------------ LeiaSDK.Delegate 위임 대상
 
-    @Override
-    public void didInitialize(LeiaSDK s) {
+    private void didInitialize(LeiaSDK s) {
         sdkReady = true;
         Log.i(TAG, "didInitialize — 백라이트/추적 적용");
         applyActive();
     }
 
-    @Override public void onFaceTrackingStarted(LeiaSDK s)    { Log.i(TAG, "얼굴추적 시작"); }
-    @Override public void onFaceTrackingStopped(LeiaSDK s)    { Log.i(TAG, "얼굴추적 정지"); }
-    @Override public void onFaceTrackingFatalError(LeiaSDK s) { Log.e(TAG, "얼굴추적 치명적 오류"); }
+    private void onFaceTrackingStarted(LeiaSDK s)    { Log.i(TAG, "얼굴추적 시작"); }
+    private void onFaceTrackingStopped(LeiaSDK s)    { Log.i(TAG, "얼굴추적 정지"); }
+    private void onFaceTrackingFatalError(LeiaSDK s) { Log.e(TAG, "얼굴추적 치명적 오류"); }
 
     /**
      * 백라이트와 카메라는 시스템 공용 자원이다. 화면에 떠 있고 3D 일 때만 잡는다.
