@@ -38,3 +38,4 @@ app3d/app/src/redmagic/assets/
 # 버전 교체 전 백업(예: leia-cnsdk-old.jar.bak) — 위와 같은 이유로 커밋 금지
 app3d/app/libs/**/*.bak
 app3d/app/src/main/assets/shaders/
+app3d/build_depthflix.log
