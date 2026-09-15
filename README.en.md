@@ -1,10 +1,13 @@
-# DepthFlix — a 3D video and photo viewer for the Lume Pad 2
+# DepthFlix — a 3D video and photo viewer for Leia lightfield panels
 
 *[한국어](README.md) · English*
 
 A viewer built to watch **3D video and 3D photos properly** on the
-[Leia Lume Pad 2](https://www.leiainc.com/) (LPD-20W: an 8-view diffractive
-lightfield panel with face tracking).
+[Leia Lume Pad 2](https://www.leiainc.com/) (LPD-20W) and the **RedMagic
+Tablet 3D Explorer Edition** (NP02J, codename K68) — both 8-view diffractive
+lightfield panels with face tracking. Each device is its own build flavour
+(`lumepad`, `redmagic`), since they run different CNSDK core lines (0.6.200
+on the Lume Pad, 0.10.x on RedMagic) and need their own connector.
 
 The stock LeiaPlayer can show them too. This one differs in these ways:
 
@@ -21,14 +24,21 @@ The stock LeiaPlayer can show them too. This one differs in these ways:
 
 ## Install
 
-Grab the APK from [Releases](../../releases) and install it. On a Lume Pad 2
-**there is nothing else to do** — no adb setup, no root.
+Grab the APK matching your device from [Releases](../../releases) and install
+it. **There is nothing else to do** — no adb setup, no root.
+
+| APK | Device | Package |
+|---|---|---|
+| `DepthFlix-LumePad2-*.apk` | Lume Pad 2 (LPD-20W) | `com.nauty.p3d` |
+| `DepthFlix-RedMagic-*.apk` | RedMagic Tablet 3D Explorer Edition (NP02J) | `com.nauty.p3d.redmagic` |
+
+Different packages, so both can be installed on one device (handy for testing).
 
 | Requirement | |
 |---|---|
-| Device | Lume Pad 2 (LPD-20W) |
 | Permission | Storage read, once. The app asks on first launch |
 | Face tracking | Done by the device's Leia service. This app runs with the camera permission denied |
+| Playback brightness forcing | On for the Lume Pad 2 (3D mode goes dim otherwise), off for RedMagic (adaptive brightness already does the right thing, confirmed on-device) — `R.bool.force_max_brightness` per device |
 
 ---
 
@@ -144,32 +154,34 @@ nothing outside an app can turn its output into 3D — the app that draws must w
 ## Building it yourself
 
 CNSDK belongs to Leia and cannot be redistributed, so **it is not in this
-repository**. Pull it off your own device.
+repository**. Pull it off your own device — and since the two devices run
+different CNSDK core lines, each needs its own connector:
 
-```bash
-# 1) find the app that carries CNSDK
-adb shell pm path com.moonlight.leia
-
-# 2) pull and unpack it
-adb pull <the path printed above> leia.apk
-unzip leia.apk -d leia/
-
-# 3) put the pieces where the build expects them
-cp leia/lib/arm64-v8a/libleiaSDK.so     app3d/app/src/main/jniLibs/arm64-v8a/
-cp leia/lib/arm64-v8a/libleiaspdlog.so  app3d/app/src/main/jniLibs/arm64-v8a/
-cp -r leia/assets/shaders               app3d/app/src/main/assets/
-cp leia/assets/cnsdk.version            app3d/app/src/main/assets/
-
-# 4) convert the CNSDK classes to a jar at app3d/app/libs/leia-cnsdk.jar
-#    (classes*.dex through dex2jar or similar)
 ```
+app3d/app/libs/lumepad/leia-cnsdk.jar                          (Lume Pad 2, CNSDK 0.6.200)
+app3d/app/src/lumepad/jniLibs/arm64-v8a/libleiaSDK.so
+app3d/app/src/lumepad/jniLibs/arm64-v8a/libleiaspdlog.so
+app3d/app/src/lumepad/assets/cnsdk.version
+
+app3d/app/libs/redmagic/leia-cnsdk.jar                         (RedMagic, CNSDK 0.10.x)
+app3d/app/src/redmagic/jniLibs/arm64-v8a/libleiaSDK-jni.so
+app3d/app/src/redmagic/jniLibs/arm64-v8a/libleiaCore-loader.so
+app3d/app/src/redmagic/assets/cnsdk.version
+```
+
+For the Lume Pad 2, pull `libleiaSDK.so`, `libleiaspdlog.so` and
+`cnsdk.version` from the APK of a CNSDK app installed on the device (e.g. the
+official Moonlight3D), and turn `classes*.dex` into a jar (dex2jar or
+similar). For RedMagic, pull the equivalent files from that device's own Leia
+system apps. The two connectors are not interchangeable — `LeiaSDK.Delegate`
+itself changed from an interface to an abstract class between the lines.
 
 Then build as usual.
 
 ```bash
 cd app3d
-gradle assembleDebug          # or assembleRelease
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleLumepadDebug     # or assembleRedmagicDebug, assembleLumepadRelease, ...
+adb install -r app/build/outputs/apk/lumepad/debug/app-lumepad-debug.apk
 ```
 
 To sign a release build, create `app3d/keystore.properties` (kept out of the
@@ -192,9 +204,9 @@ it, but those codecs will be silent.
 
 | | Why |
 |---|---|
-| `app3d/app/libs/leia-cnsdk.jar` | Leia's property. Take it from your device |
-| `app3d/app/src/main/jniLibs/` | Same (`libleiaSDK.so`, `libleiaspdlog.so`) |
-| `app3d/app/src/main/assets/shaders/`, `cnsdk.version` | Same |
+| `app3d/app/libs/lumepad/leia-cnsdk.jar`, `app3d/app/libs/redmagic/leia-cnsdk.jar` | Leia's property. Take it from your device |
+| `app3d/app/src/{lumepad,redmagic}/jniLibs/` | Same |
+| `app3d/app/src/{lumepad,redmagic}/assets/cnsdk.version` | Same |
 | `app3d/ffmpeg/src/main/jni/ffmpeg/` | Regenerated by the build script |
 | Signing keys | Naturally |
 

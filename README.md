@@ -1,9 +1,12 @@
-# DepthFlix — Lume Pad 2 용 3D 영상·사진 뷰어
+# DepthFlix — Leia 라이트필드 패널용 3D 영상·사진 뷰어
 
 *한국어 · [English](README.en.md)*
 
-[Leia Lume Pad 2](https://www.leiainc.com/) (LPD-20W, 8방향 회절 라이트필드 +
-얼굴추적) 에서 **3D 영상과 3D 사진을 제대로 보기 위해** 만든 뷰어다.
+[Leia Lume Pad 2](https://www.leiainc.com/)(LPD-20W)와 **RedMagic Tablet 3D
+Explorer Edition**(NP02J, 코드네임 K68) — 8방향 회절 라이트필드 + 얼굴추적을 쓰는
+두 기기에서 **3D 영상과 3D 사진을 제대로 보기 위해** 만든 뷰어다. 기기별로 빌드
+플레이버가 나뉘어 있다(`lumepad`, `redmagic`) — CNSDK 코어 버전이 달라(Lume Pad
+0.6.200, RedMagic 0.10.x) 연결부를 따로 준비해야 한다.
 
 기기에 들어 있는 LeiaPlayer 로도 볼 수는 있지만, 이쪽은 다음이 다르다.
 
@@ -18,14 +21,21 @@
 
 ## 설치
 
-[Releases](../../releases) 의 APK 를 받아 설치하면 된다. Lume Pad 2 라면
+[Releases](../../releases) 에서 기기에 맞는 APK 를 받아 설치하면 된다.
 **그 밖에 할 일이 없다** — adb 설정도, 루팅도 필요 없다.
+
+| APK | 기기 | 패키지 |
+|---|---|---|
+| `DepthFlix-LumePad2-*.apk` | Lume Pad 2 (LPD-20W) | `com.nauty.p3d` |
+| `DepthFlix-RedMagic-*.apk` | RedMagic Tablet 3D Explorer Edition (NP02J) | `com.nauty.p3d.redmagic` |
+
+패키지가 달라 한 기기에 둘 다 설치돼 있어도 문제없다(테스트 편의용).
 
 | 필요한 것 | |
 |---|---|
-| 기기 | Lume Pad 2 (LPD-20W) |
 | 권한 | 저장소 읽기 하나. 처음 실행할 때 앱이 물어본다 |
 | 얼굴추적 | 기기의 Leia 서비스가 한다. 이 앱은 카메라 권한 없이 동작한다 |
+| 재생 중 밝기 강제 | Lume Pad 2는 켬(3D 모드가 어두워지는 문제 때문), RedMagic은 끔(적응형 밝기로 충분함이 실기로 확인됨) — `R.bool.force_max_brightness`로 기기별 값 |
 
 ---
 
@@ -134,32 +144,33 @@ Moonlight 을 예로 들어, CNSDK 를 앱에 넣는 법과 실기에서 물린 
 ## 직접 빌드하려면
 
 CNSDK 는 Leia 의 것이라 재배포할 수 없어서 **저장소에 들어 있지 않다.**
-본인 기기에서 꺼내야 한다.
+본인 기기에서 꺼내야 하고, 두 기기의 CNSDK 코어 버전이 달라 연결부도 따로
+준비해야 한다.
 
-```bash
-# 1) 기기에서 CNSDK 를 들고 있는 앱을 찾는다
-adb shell pm path com.moonlight.leia
-
-# 2) APK 를 꺼내 푼다
-adb pull <위에서 나온 경로> leia.apk
-unzip leia.apk -d leia/
-
-# 3) 필요한 것만 제자리에 놓는다
-cp leia/lib/arm64-v8a/libleiaSDK.so     app3d/app/src/main/jniLibs/arm64-v8a/
-cp leia/lib/arm64-v8a/libleiaspdlog.so  app3d/app/src/main/jniLibs/arm64-v8a/
-cp -r leia/assets/shaders               app3d/app/src/main/assets/
-cp leia/assets/cnsdk.version            app3d/app/src/main/assets/
-
-# 4) CNSDK 클래스를 jar 로 만들어 app3d/app/libs/leia-cnsdk.jar 에 둔다
-#    (classes*.dex 를 dex2jar 등으로 변환)
 ```
+app3d/app/libs/lumepad/leia-cnsdk.jar                          (Lume Pad 2, CNSDK 0.6.200)
+app3d/app/src/lumepad/jniLibs/arm64-v8a/libleiaSDK.so
+app3d/app/src/lumepad/jniLibs/arm64-v8a/libleiaspdlog.so
+app3d/app/src/lumepad/assets/cnsdk.version
+
+app3d/app/libs/redmagic/leia-cnsdk.jar                         (RedMagic, CNSDK 0.10.x)
+app3d/app/src/redmagic/jniLibs/arm64-v8a/libleiaSDK-jni.so
+app3d/app/src/redmagic/jniLibs/arm64-v8a/libleiaCore-loader.so
+app3d/app/src/redmagic/assets/cnsdk.version
+```
+
+Lume Pad 2 쪽은 기기에 설치된 CNSDK 사용 앱(예: 정식 Moonlight3D)의 APK에서
+`lib/arm64-v8a/libleiaSDK.so`·`libleiaspdlog.so`와 `assets/cnsdk.version`을
+꺼내고, `classes*.dex`를 jar로 만든다(dex2jar 등). RedMagic 쪽은 기기 자체의
+Leia 시스템 앱에서 같은 방식으로 꺼낸다 — 두 연결부는 서로 바꿔 쓸 수 없다
+(`LeiaSDK.Delegate`가 인터페이스에서 추상 클래스로 바뀌는 등 API 자체가 다르다).
 
 그 다음 평소대로 빌드한다.
 
 ```bash
 cd app3d
-gradle assembleDebug          # 또는 assembleRelease
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleLumepadDebug     # 또는 assembleRedmagicDebug, assembleLumepadRelease 등
+adb install -r app/build/outputs/apk/lumepad/debug/app-lumepad-debug.apk
 ```
 
 서명해서 배포하려면 `app3d/keystore.properties` 를 만든다 (저장소에 넣지 않는다).
@@ -180,7 +191,7 @@ FFmpeg 오디오 확장(AC3/E-AC3/DTS/TrueHD)은 [`app3d/ffmpeg/README.md`](app3
 
 | | 왜 |
 |---|---|
-| `app3d/app/libs/leia-cnsdk.jar` | Leia 의 저작물. 기기에서 꺼내 쓸 것 |
+| `app3d/app/libs/lumepad/leia-cnsdk.jar`, `app3d/app/libs/redmagic/leia-cnsdk.jar` | Leia 의 저작물. 기기에서 꺼내 쓸 것 |
 | `app3d/app/src/main/jniLibs/` | 같음 (`libleiaSDK.so`, `libleiaspdlog.so`) |
 | `app3d/app/src/main/assets/shaders/`, `cnsdk.version` | 같음 |
 | `app3d/ffmpeg/src/main/jni/ffmpeg/` | 빌드 스크립트로 재생성 |
