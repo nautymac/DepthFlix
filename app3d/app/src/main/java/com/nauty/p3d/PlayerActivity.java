@@ -32,6 +32,7 @@ import com.nauty.p3d.engine.ExoEngine;
 import com.nauty.p3d.engine.TrackInfo;
 import com.nauty.p3d.engine.VideoEngine;
 import com.nauty.p3d.gl.Stereo3DView;
+import com.nauty.p3d.net.SmbSubtitles;
 import com.nauty.p3d.panel.Panel;
 import com.nauty.p3d.subtitle.SubtitleBitmap;
 import com.nauty.p3d.subtitle.Subtitles;
@@ -798,9 +799,39 @@ public class PlayerActivity extends Activity
     private void autoLoadSubtitle() {
         String ytSub = getIntent().getStringExtra(EXTRA_SUBTITLE_PATH);
         if (ytSub != null) { loadSubtitle(new File(ytSub)); return; }
+
+        // SMB 소스는 java.io.File 이 아니라(resolveMediaFile() 이 file/content 스킴만
+        // 처리한다) videoFile 이 null 이라 findSibling() 이 아무것도 못 찾는다 —
+        // 실기에서 같은 폴더에 같은 이름의 .smi 가 있는데도 자막이 전혀 안 잡히던
+        // 원인이 이거였다. SMB 는 네트워크 호출이라 따로 배경 스레드에서 처리한다.
+        if (pendingUri != null && "smb".equals(pendingUri.getScheme())) {
+            autoLoadSubtitleSmb(pendingUri);
+            return;
+        }
+
         File sub = Subtitles.findSibling(videoFile);
         if (sub != null) loadSubtitle(sub);
         else updateSubtitleName();
+    }
+
+    private void autoLoadSubtitleSmb(final Uri videoUri) {
+        new Thread(new Runnable() {
+            @Override public void run() {
+                Uri sub = SmbSubtitles.findSibling(PlayerActivity.this, videoUri);
+                final File f = sub != null ? SmbSubtitles.download(PlayerActivity.this, sub) : null;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (isStaleRequest(videoUri)) return;   // 그 사이 다른 영상으로 넘어갔다
+                        if (f != null) loadSubtitle(f); else updateSubtitleName();
+                    }
+                });
+            }
+        }, "smb-subtitle-auto").start();
+    }
+
+    /** 배경 스레드가 끝났을 때 이미 다른 영상으로 넘어갔는지 본다. */
+    private boolean isStaleRequest(Uri requested) {
+        return pendingUri == null || !pendingUri.equals(requested);
     }
 
     private void loadSubtitle(File f) {
@@ -830,6 +861,13 @@ public class PlayerActivity extends Activity
      * 상태면 내장 쪽은 그냥 빈 목록이라 외부 파일만 남는다.
      */
     private void pickSubtitle() {
+        // SMB 는 videoFile 이 없어(자세한 이유는 autoLoadSubtitle() 주석 참고) 아래
+        // 로컬 폴더 훑기가 전혀 안 먹힌다 — 목록도 네트워크 호출이라 배경 스레드로 뺀다.
+        if (pendingUri != null && "smb".equals(pendingUri.getScheme())) {
+            pickSubtitleSmb();
+            return;
+        }
+
         final List<File> found = new ArrayList<>();
         List<File> dirs = new ArrayList<>();
         if (videoFile != null && videoFile.getParentFile() != null) dirs.add(videoFile.getParentFile());
@@ -899,6 +937,93 @@ public class PlayerActivity extends Activity
                     }
                 })
                 .show();
+    }
+
+    /** {@link #pickSubtitle()} 의 SMB 판. 폴더 목록을 배경 스레드에서 받아온 뒤 같은 모양의 대화상자를 띄운다. */
+    private void pickSubtitleSmb() {
+        final Uri videoUri = pendingUri;
+        new Thread(new Runnable() {
+            @Override public void run() {
+                final List<SmbSubtitles.Candidate> found =
+                        SmbSubtitles.listSubtitles(PlayerActivity.this, videoUri);
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (isStaleRequest(videoUri)) return;   // 그 사이 다른 영상으로 넘어갔다
+                        showSmbSubtitleDialog(found);
+                    }
+                });
+            }
+        }, "smb-subtitle-list").start();
+    }
+
+    private void showSmbSubtitleDialog(final List<SmbSubtitles.Candidate> found) {
+        final List<TrackInfo> embedded = engine == null
+                ? Collections.<TrackInfo>emptyList() : engine.textTracks();
+
+        if (found.isEmpty() && embedded.isEmpty()) {
+            Toast.makeText(this, R.string.sub_not_found, Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        final int extCount = found.size();
+        final String[] items = new String[1 + extCount + embedded.size()];
+        items[0] = getString(R.string.sub_none);
+        for (int i = 0; i < extCount; i++) items[1 + i] = found.get(i).name;
+        for (int i = 0; i < embedded.size(); i++) {
+            TrackInfo t = embedded.get(i);
+            items[1 + extCount + i] = getString(R.string.sub_embedded_prefix, t.label)
+                    + (t.imageBased ? getString(R.string.sub_image_suffix) : "");
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.btn_pick_subtitle)
+                .setItems(items, (d, which) -> {
+                    if (which == 0) {
+                        selectedEmbeddedText = null;
+                        subtitleTrack = null;
+                        lastCueText = null;
+                        glView.setSubtitleBitmap(null);
+                        if (engine != null) engine.selectTextTrack(null);
+                        updateSubtitleName();
+                    } else if (which <= extCount) {
+                        selectedEmbeddedText = null;
+                        if (engine != null) engine.selectTextTrack(null);
+                        downloadAndLoadSmbSubtitle(found.get(which - 1).uri);
+                    } else {
+                        TrackInfo t = embedded.get(which - 1 - extCount);
+                        if (t.imageBased) {
+                            Toast.makeText(PlayerActivity.this,
+                                    R.string.sub_image_unsupported, Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        subtitleTrack = null;
+                        lastCueText = null;
+                        glView.setSubtitleBitmap(null);
+                        selectedEmbeddedText = t;
+                        if (engine != null) engine.selectTextTrack(t);
+                        updateSubtitleName();
+                    }
+                })
+                .show();
+    }
+
+    private void downloadAndLoadSmbSubtitle(final Uri subtitleUri) {
+        Toast.makeText(this, R.string.sub_downloading, Toast.LENGTH_SHORT).show();
+        new Thread(new Runnable() {
+            @Override public void run() {
+                final File f = SmbSubtitles.download(PlayerActivity.this, subtitleUri);
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (f != null) {
+                            loadSubtitle(f);
+                        } else {
+                            Toast.makeText(PlayerActivity.this, getString(R.string.sub_load_failed,
+                                    subtitleUri.getLastPathSegment()), Toast.LENGTH_LONG).show();
+                        }
+                    }
+                });
+            }
+        }, "smb-subtitle-download").start();
     }
 
     /** 컨테이너 안의 오디오 트랙을 고른다. 사진이나 트랙이 없으면 안내만 한다. */

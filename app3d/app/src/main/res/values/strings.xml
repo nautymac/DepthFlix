@@ -120,6 +120,7 @@
     <string name="sub_load_failed">Could not read the subtitle: %s</string>
     <string name="sub_loaded">Subtitle %1$s (%2$d cues)</string>
     <string name="sub_not_found">No subtitle files found.\nPut a .srt/.smi next to the video, or in Movies/Download.</string>
+    <string name="sub_downloading">Downloading subtitle over the network…</string>
     <string name="sub_embedded_prefix">[Embedded] %s</string>
     <string name="sub_image_suffix"> (image, not supported)</string>
     <string name="sub_image_unsupported">Image subtitles (PGS/VOBSUB) aren\'t supported yet.</string>

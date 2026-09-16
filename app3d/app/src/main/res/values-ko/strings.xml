@@ -118,6 +118,7 @@
     <string name="sub_load_failed">자막을 읽지 못했습니다: %s</string>
     <string name="sub_loaded">자막 %1$s (%2$d개)</string>
     <string name="sub_not_found">자막 파일을 찾지 못했습니다.\n영상과 같은 폴더나 Movies/Download 에 .srt/.smi 를 두세요.</string>
+    <string name="sub_downloading">네트워크로 자막을 받는 중…</string>
     <string name="sub_embedded_prefix">[내장] %s</string>
     <string name="sub_image_suffix"> (이미지, 미지원)</string>
     <string name="sub_image_unsupported">이미지 자막(PGS/VOBSUB)은 아직 지원하지 않습니다.</string>
