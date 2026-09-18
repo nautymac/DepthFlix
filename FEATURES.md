@@ -15,7 +15,7 @@
 
 ### 2. 3D 입체 처리
 - 소스 포맷 자동 판별: 2D(→3D 변환), 좌우 SBS(half/full), 상하 TB(half/full)
-- 자동 판별이 틀렸을 때 수동 선택 가능, 좌우 반전(Swap L/R) 지원
+- 자동 판별이 틀렸을 때 수동 선택 가능, 좌우 반전(Swap L/R) 지원 — 사진은 기본값 ON, 영상은 기본값 OFF
 - 2D→3D 변환 시 깊이(시차 강도) 조절
 - 수렴(컨버전스) 보정 — 화면 앞/뒤로 수동 조절 + 장면 중심 자동 측정
 - 화면비(Aspect) 자동/수동 미세조정
@@ -41,6 +41,7 @@
 ### 6. 재생 편의
 - 이어보기 (재생 위치 저장/복원)
 - 재생 오류 시 사용자에게 원인 안내 (지원 안 되는 오디오 코덱 등)
+- 설정판에서 바로 파일 삭제 (확인 대화상자 후 삭제, 사진은 다음 사진으로 자동 이동, 영상은 목록으로 복귀 — SMB 등 네트워크 소스는 대상 아님)
 
 ### 7. 기기별 차별화 항목
 - 재생 중 화면 밝기: Lume Pad 2는 3D 모드 특성상 재생 중 밝기를 강제로 최대화(고정), RedMagic은 기기 자체 자동 밝기로 충분해 강제하지 않는 것이 기본값 (비교용으로 강제 버전도 별도 배포)
@@ -61,7 +62,7 @@
 
 ### 2. 3D stereo handling
 - Automatic source format detection: 2D (→3D conversion), side-by-side (half/full), over-under (half/full)
-- Manual override when auto-detection is wrong, plus left/right swap
+- Manual override when auto-detection is wrong, plus left/right swap — defaults to ON for photos, OFF for video
 - Depth (parallax strength) adjustment for 2D→3D conversion
 - Convergence correction — manual push in front of/behind the screen, plus automatic scene-center measurement
 - Automatic/manual aspect-ratio fine-tuning
@@ -87,6 +88,7 @@
 ### 6. Playback convenience
 - Resume playback (saves/restores position)
 - Clear error messages on playback failure (e.g. unsupported audio codec)
+- Delete the current file right from the settings panel (confirmation dialog first; advances to the next photo, or returns to the list for video — not available for network sources like SMB)
 
 ### 7. Per-device differences
 - Playback brightness: the Lume Pad 2 forces maximum screen brightness during playback because of how its 3D mode handles backlighting, while RedMagic's own adaptive brightness is sufficient on its own, so forcing is off by default there (a forced variant is also published for side-by-side comparison)

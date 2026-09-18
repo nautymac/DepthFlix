@@ -3,6 +3,7 @@ package com.nauty.p3d;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -249,6 +250,7 @@ public class PlayerActivity extends Activity
             if (folder == null) folder = MediaLibrary.folderOf(this, pendingUri);
             photos = MediaLibrary.list(this, MediaLibrary.Kind.IMAGE, folder);
             photoIndex = MediaLibrary.indexOf(photos, pendingUri);
+            glView.setSwapLR(true);   // 사진은 좌우반전 기본값을 켠 상태로 시작한다
             beginPhoto();
             applySavedSubtitlePrefs();
             videoFile = resolveMediaFile(pendingUri);
@@ -725,6 +727,11 @@ public class PlayerActivity extends Activity
 
         // 엔진 선택 버튼은 없다. 영상은 ExoPlayer 하나뿐이다 (VideoEngine 주석 참고).
 
+        p.addView(header(getString(R.string.hdr_file)));
+        panelButton(p, getString(R.string.btn_delete_file), new View.OnClickListener() {
+            @Override public void onClick(View v) { confirmDeleteCurrentFile(); }
+        });
+
         scroll.addView(p);
         return scroll;
     }
@@ -794,6 +801,58 @@ public class PlayerActivity extends Activity
             }
         } catch (Exception ignored) { }
         return null;
+    }
+
+    // -------------------------------------------------------------- 파일 삭제
+
+    /**
+     * SMB·DLNA·유튜브 등 네트워크 소스는 뺀다 — resolveMediaFile() 이 file/content
+     * 스킴만 처리하므로 videoFile 이 null 이면 로컬 파일이 아니라는 뜻이다.
+     */
+    private void confirmDeleteCurrentFile() {
+        if (videoFile == null) {
+            Toast.makeText(this, R.string.delete_unsupported, Toast.LENGTH_LONG).show();
+            return;
+        }
+        final Uri uri = pendingUri;
+        final File file = videoFile;
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.dlg_delete_title)
+                .setMessage(getString(R.string.dlg_delete_message, mediaKey))
+                .setPositiveButton(R.string.action_delete, new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) { performDelete(uri, file); }
+                })
+                .setNegativeButton(R.string.action_cancel, null)
+                .show();
+    }
+
+    /** MediaStore 로 먼저 지운다(인덱스+실파일 동시 제거). 안 되면 실경로로 직접 지운다. */
+    private void performDelete(Uri uri, File file) {
+        boolean ok;
+        try {
+            ok = getContentResolver().delete(uri, null, null) > 0;
+        } catch (Exception e) {
+            ok = false;
+        }
+        if (!ok) {
+            try { ok = file.delete(); } catch (Exception ignored) { ok = false; }
+        }
+        if (!ok) {
+            Toast.makeText(this, getString(R.string.delete_failed, mediaKey), Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (isPhoto) {
+            if (photos != null) {
+                int idx = MediaLibrary.indexOf(photos, uri);
+                if (idx >= 0) photos.remove(idx);
+            }
+            if (photos == null || photos.isEmpty()) { finish(); return; }
+            if (photoIndex >= photos.size()) photoIndex = photos.size() - 1;
+            showPhoto(0);   // 삭제로 당겨진 자리를 다시 그린다
+        } else {
+            // 영상은 다음/이전 넘기기가 없어 목록 화면으로 돌아간다.
+            finish();
+        }
     }
 
     private void autoLoadSubtitle() {

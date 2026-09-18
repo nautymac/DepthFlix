@@ -128,4 +128,13 @@
     <string name="audio_track_default">기본값</string>
     <string name="audio_track_none">오디오 트랙이 없습니다</string>
     <string name="audio_track_selected">오디오 트랙: %s</string>
+
+    <!-- 설정판: 파일 -->
+    <string name="hdr_file">파일</string>
+    <string name="btn_delete_file">파일 삭제</string>
+    <string name="dlg_delete_title">파일 삭제</string>
+    <string name="dlg_delete_message">%s\n삭제하면 되돌릴 수 없습니다.</string>
+    <string name="delete_unsupported">이 소스는 삭제할 수 없습니다 (네트워크 파일).</string>
+    <string name="delete_failed">삭제하지 못했습니다: %s</string>
+    <string name="action_delete">삭제</string>
 </resources>

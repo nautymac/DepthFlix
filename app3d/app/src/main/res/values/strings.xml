@@ -130,4 +130,13 @@
     <string name="audio_track_default">Default</string>
     <string name="audio_track_none">No audio tracks found</string>
     <string name="audio_track_selected">Audio track: %s</string>
+
+    <!-- 설정판: 파일 -->
+    <string name="hdr_file">File</string>
+    <string name="btn_delete_file">Delete file</string>
+    <string name="dlg_delete_title">Delete file</string>
+    <string name="dlg_delete_message">%s\nThis cannot be undone.</string>
+    <string name="delete_unsupported">This source can\'t be deleted (network file).</string>
+    <string name="delete_failed">Could not delete the file: %s</string>
+    <string name="action_delete">Delete</string>
 </resources>
