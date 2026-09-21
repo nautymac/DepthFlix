@@ -42,6 +42,7 @@
 - 이어보기 (재생 위치 저장/복원)
 - 재생 오류 시 사용자에게 원인 안내 (지원 안 되는 오디오 코덱 등)
 - 설정판에서 바로 파일 삭제 (확인 대화상자 후 삭제, 사진은 다음 사진으로 자동 이동, 영상은 목록으로 복귀 — SMB 등 네트워크 소스는 대상 아님)
+- 플레이어에서 뒤로 나오면 목록이 보던 자리를 그대로 유지 (수백 장짜리 폴더에서 처음으로 튀지 않음)
 
 ### 7. 기기별 차별화 항목
 - 재생 중 화면 밝기: Lume Pad 2는 3D 모드 특성상 재생 중 밝기를 강제로 최대화(고정), RedMagic은 기기 자체 자동 밝기로 충분해 강제하지 않는 것이 기본값 (비교용으로 강제 버전도 별도 배포)
@@ -89,6 +90,7 @@
 - Resume playback (saves/restores position)
 - Clear error messages on playback failure (e.g. unsupported audio codec)
 - Delete the current file right from the settings panel (confirmation dialog first; advances to the next photo, or returns to the list for video — not available for network sources like SMB)
+- The file list keeps its scroll position when you back out of the player (no more jumping to the top of a folder with hundreds of photos)
 
 ### 7. Per-device differences
 - Playback brightness: the Lume Pad 2 forces maximum screen brightness during playback because of how its 3D mode handles backlighting, while RedMagic's own adaptive brightness is sufficient on its own, so forcing is off by default there (a forced variant is also published for side-by-side comparison)
