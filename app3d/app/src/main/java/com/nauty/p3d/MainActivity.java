@@ -61,10 +61,19 @@ public class MainActivity extends Activity {
     private String openFolder = null;
 
     /**
-     * 플레이어에서 뒤로 나올 때 보고 있던 파일 — 목록을 그 자리까지 스크롤하는 데 쓴다.
-     * 없으면(즉시 소비하고 null 로 되돌린다) 그냥 평소처럼 맨 위에서 보여준다.
+     * 어댑터는 한 번만 만들고 내용만 갈아 끼운다.
+     *
+     * setAdapter 로 새 어댑터를 줄 때마다 ListView 는 스크롤을 맨 위로 되돌린다.
+     * 플레이어에서 뒤로 나올 때마다 onResume -> reload 가 도는데, 그때마다 사진
+     * 800장짜리 목록이 처음으로 튀어서 보던 자리를 다시 찾아 내려가야 했다. 같은
+     * 어댑터의 데이터만 바꾸면 ListView 가 보던 위치를 그대로 지킨다 — 따로
+     * 스크롤을 옮길 필요가 없다. 다른 폴더나 다른 종류로 옮겨 갈 때만 맨 위로 보낸다
+     * ({@link #reload()} 의 sameView).
      */
-    private Uri pendingScrollUri = null;
+    private ArrayAdapter<String> adapter;
+    private boolean shownOnce = false;
+    private MediaLibrary.Kind shownKind;
+    private String shownFolder;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -143,7 +152,6 @@ public class MainActivity extends Activity {
         }
 
         handleShareIntent(getIntent());
-        captureLastUri(getIntent());
     }
 
     /**
@@ -155,14 +163,6 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         handleShareIntent(intent);
-        captureLastUri(intent);
-    }
-
-    /** PlayerActivity.backToList() 가 실어 보낸, 방금까지 보던 파일의 URI. */
-    private void captureLastUri(Intent intent) {
-        if (intent == null) return;
-        Uri last = intent.getParcelableExtra(PlayerActivity.EXTRA_LAST_URI);
-        if (last != null) pendingScrollUri = last;
     }
 
     private void handleShareIntent(Intent intent) {
@@ -222,6 +222,17 @@ public class MainActivity extends Activity {
         else                    loadFiles(photo);
     }
 
+    /**
+     * 직전에 보여준 것과 같은 화면인가 (같은 종류, 같은 폴더 — 폴더 목록끼리도 같은
+     * 화면이다). 같으면 스크롤을 건드리지 않고, 다르면 맨 위로 보낸다.
+     * loadFolders 가 폴더 하나뿐일 때 openFolder 를 바꾼 뒤 loadFiles 를 부르므로,
+     * reload() 시점이 아니라 show() 시점의 openFolder 로 판단해야 한다.
+     */
+    private boolean sameView() {
+        return shownOnce && shownKind == kind
+                && (openFolder == null ? shownFolder == null : openFolder.equals(shownFolder));
+    }
+
     private void loadFolders(boolean photo) {
         folders = MediaLibrary.folders(this, kind);
         titles.clear();
@@ -256,12 +267,6 @@ public class MainActivity extends Activity {
         crumb.setText(getString(R.string.crumb_in_folder,
                 MediaLibrary.shortPath(this, openFolder), items.size()));
         show(display, getString(R.string.empty_folder));
-
-        if (pendingScrollUri != null) {
-            int pos = uris.indexOf(pendingScrollUri);
-            if (pos >= 0) list.setSelection(pos);
-            pendingScrollUri = null;
-        }
     }
 
     /**
@@ -359,8 +364,22 @@ public class MainActivity extends Activity {
     }
 
     private void show(List<String> display, String emptyText) {
-        list.setAdapter(new ArrayAdapter<>(this,
-                android.R.layout.simple_list_item_1, display));
+        boolean keepScroll = sameView();
+        if (adapter == null) {
+            adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1,
+                    new ArrayList<String>());
+            list.setAdapter(adapter);
+        }
+        adapter.setNotifyOnChange(false);
+        adapter.clear();
+        adapter.addAll(display);
+        adapter.notifyDataSetChanged();
+        if (!keepScroll) list.setSelection(0);
+
+        shownOnce   = true;
+        shownKind   = kind;
+        shownFolder = openFolder;
+
         empty.setVisibility(display.isEmpty() ? View.VISIBLE : View.GONE);
         empty.setText(emptyText);
     }
