@@ -65,6 +65,12 @@ public class PlayerActivity extends Activity
     public static final String EXTRA_FOLDER = "folder";
     /** 유튜브 링크에서 미리 내려받아 둔 자막(.srt) 파일 경로. MainActivity.openYoutube() 참고. */
     public static final String EXTRA_SUBTITLE_PATH = "subtitle_path";
+    /**
+     * 목록으로 돌아갈 때 지금 보고 있던 파일의 URI. MainActivity 가 이걸로 목록을
+     * 그 자리까지 스크롤한다 — 사진 800장을 넘기다 뒤로 가면 처음으로 돌아가
+     * 보던 자리를 다시 찾기 힘들다는 문제였다(backToList() 참고).
+     */
+    public static final String EXTRA_LAST_URI = "last_uri";
 
     private static final String TAG        = "P3D";
     private static final String PREFS      = "p3d";
@@ -560,6 +566,7 @@ public class PlayerActivity extends Activity
         if (engine != null) { engine.pause(); }
         Intent i = new Intent(this, MainActivity.class);
         i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        if (pendingUri != null) i.putExtra(EXTRA_LAST_URI, pendingUri);
         startActivity(i);
         finish();
     }

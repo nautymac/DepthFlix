@@ -60,6 +60,12 @@ public class MainActivity extends Activity {
     /** null 이면 폴더 목록, 아니면 그 폴더의 파일 목록. */
     private String openFolder = null;
 
+    /**
+     * 플레이어에서 뒤로 나올 때 보고 있던 파일 — 목록을 그 자리까지 스크롤하는 데 쓴다.
+     * 없으면(즉시 소비하고 null 로 되돌린다) 그냥 평소처럼 맨 위에서 보여준다.
+     */
+    private Uri pendingScrollUri = null;
+
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -137,6 +143,7 @@ public class MainActivity extends Activity {
         }
 
         handleShareIntent(getIntent());
+        captureLastUri(getIntent());
     }
 
     /**
@@ -148,6 +155,14 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         handleShareIntent(intent);
+        captureLastUri(intent);
+    }
+
+    /** PlayerActivity.backToList() 가 실어 보낸, 방금까지 보던 파일의 URI. */
+    private void captureLastUri(Intent intent) {
+        if (intent == null) return;
+        Uri last = intent.getParcelableExtra(PlayerActivity.EXTRA_LAST_URI);
+        if (last != null) pendingScrollUri = last;
     }
 
     private void handleShareIntent(Intent intent) {
@@ -241,6 +256,12 @@ public class MainActivity extends Activity {
         crumb.setText(getString(R.string.crumb_in_folder,
                 MediaLibrary.shortPath(this, openFolder), items.size()));
         show(display, getString(R.string.empty_folder));
+
+        if (pendingScrollUri != null) {
+            int pos = uris.indexOf(pendingScrollUri);
+            if (pos >= 0) list.setSelection(pos);
+            pendingScrollUri = null;
+        }
     }
 
     /**
