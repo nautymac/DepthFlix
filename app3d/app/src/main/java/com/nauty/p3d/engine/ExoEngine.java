@@ -250,8 +250,16 @@ public class ExoEngine implements VideoEngine {
      * 셰이더가 해야 할 HDR->SDR 변환. Android 13 이상은 디코더가 톤매핑하므로 0
      * (ToneMappingVideoRenderer). 그 아래는 p3d_src.frag 의 uHdr 로 넘긴다.
      */
+    /**
+     * true 면 Android 13+ 에서 디코더(벤더)에 톤매핑을 맡기고, false 면 모든 기기에서
+     * 우리 셰이더가 한다. RedMagic 실기에서 디코더 경로가 가끔 색을 깨뜨려(C2BqBuffer
+     * dequeue 실패 동반) 셰이더 경로로 확정 — 우리가 통제하므로 기기마다 같은 결과.
+     */
+    private static final boolean USE_DECODER_TONEMAP = false;
+
     private static int shaderHdrMode(ColorInfo c) {
-        if (c == null || Build.VERSION.SDK_INT >= 33) return 0;
+        if (c == null) return 0;
+        if (USE_DECODER_TONEMAP && Build.VERSION.SDK_INT >= 33) return 0;
         if (c.colorTransfer == C.COLOR_TRANSFER_ST2084) return 1;
         if (c.colorTransfer == C.COLOR_TRANSFER_HLG)    return 2;
         return 0;
@@ -306,7 +314,8 @@ public class ExoEngine implements VideoEngine {
                 boolean deviceNeedsNoPostProcessWorkaround, int tunnelingAudioSessionId) {
             MediaFormat mf = super.getMediaFormat(format, codecMimeType, codecMaxValues,
                     codecOperatingRate, deviceNeedsNoPostProcessWorkaround, tunnelingAudioSessionId);
-            if (Build.VERSION.SDK_INT >= 33 && ColorInfo.isTransferHdr(format.colorInfo)) {
+            if (USE_DECODER_TONEMAP && Build.VERSION.SDK_INT >= 33
+                    && ColorInfo.isTransferHdr(format.colorInfo)) {
                 mf.setInteger(MediaFormat.KEY_COLOR_TRANSFER_REQUEST,
                         MediaFormat.COLOR_TRANSFER_SDR_VIDEO);
                 Log.i(TAG, "HDR 영상 → 디코더에 SDR 톤매핑 요청: " + describe(format.colorInfo));

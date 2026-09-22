@@ -20,7 +20,7 @@
 - 수렴(컨버전스) 보정 — 화면 앞/뒤로 수동 조절 + 장면 중심 자동 측정
 - 화면비(Aspect) 자동/수동 미세조정
 - 3D/2D 출력 전환, SBS 확인 모드
-- **HDR 영상(HDR10/PQ, HLG, BT.2020) 색 보정** — RedMagic(Android 13+)은 디코더가 SDR로 톤매핑, Lume Pad 2(Android 12)는 셰이더에서 직접 변환(PQ/HLG → BT.709 → 톤매핑). 넓은 색영역(Display P3) 사진도 sRGB로 변환해 표시. 중간 버퍼는 8비트(밴딩 방지)
+- **HDR 영상(HDR10/PQ, HLG, BT.2020) 색 보정** — 셰이더에서 직접 변환(PQ/HLG → BT.709 → 톤매핑), 모든 기기 공통. 넓은 색영역(Display P3) 사진도 sRGB로 변환해 표시. 중간 버퍼는 8비트(밴딩 방지)
 
 ### 3. 자막
 - SRT, SMI(SAMI) 파싱 지원 — EUC-KR 인코딩 자동 감지
@@ -69,7 +69,7 @@
 - Convergence correction — manual push in front of/behind the screen, plus automatic scene-center measurement
 - Automatic/manual aspect-ratio fine-tuning
 - 3D/2D output toggle, SBS check mode
-- **Correct colors for HDR video (HDR10/PQ, HLG, BT.2020)** — on RedMagic (Android 13+) the decoder tone-maps to SDR; on Lume Pad 2 (Android 12) the shader converts directly (PQ/HLG → BT.709 → tone map). Wide-gamut (Display P3) photos are converted to sRGB, and the intermediate buffer is 8-bit to avoid banding
+- **Correct colors for HDR video (HDR10/PQ, HLG, BT.2020)** — converted in the shader (PQ/HLG → BT.709 → tone map) on every device. Wide-gamut (Display P3) photos are converted to sRGB, and the intermediate buffer is 8-bit to avoid banding
 
 ### 3. Subtitles
 - SRT and SMI (SAMI) parsing — automatic EUC-KR encoding detection
