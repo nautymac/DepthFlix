@@ -16,8 +16,10 @@ public class Fbo {
         GLES20.glGenRenderbuffers(1, a, 0); rbo = a[0];
 
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, tex);
-        GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGB, w, h, 0,
-                GLES20.GL_RGB, GLES20.GL_UNSIGNED_SHORT_5_6_5, null);
+        // 8비트/채널. 원래 RGB565 였는데 그러면 8비트 원본이 여기서 65,536색으로 깎여
+        // 그라데이션 밴딩과 미묘한 색 차이가 났다. 메모리는 2배지만 이 기기들엔 문제없다.
+        GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, w, h, 0,
+                GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, null);
         GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
         GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
         GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);

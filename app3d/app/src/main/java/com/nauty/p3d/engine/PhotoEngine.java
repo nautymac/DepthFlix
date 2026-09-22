@@ -102,6 +102,12 @@ public class PhotoEngine implements VideoEngine {
             while (bounds.outWidth / o.inSampleSize > MAX_WIDTH) o.inSampleSize *= 2;
             // ARGB_8888 이어야 lockCanvas 로 그릴 때 색이 상하지 않는다.
             o.inPreferredConfig = Bitmap.Config.ARGB_8888;
+            // 우리 GL 경로는 sRGB 만 안다. 지정하지 않으면 Display P3 사진(아이폰 기본)이
+            // P3 값 그대로 올라가 sRGB 로 해석돼 빨강이 오렌지로 빠진다 — 여기서 변환시킨다.
+            if (Build.VERSION.SDK_INT >= 26) {
+                o.inPreferredColorSpace = android.graphics.ColorSpace.get(
+                        android.graphics.ColorSpace.Named.SRGB);
+            }
 
             in = ctx.getContentResolver().openInputStream(uri);
             if (in == null) return null;

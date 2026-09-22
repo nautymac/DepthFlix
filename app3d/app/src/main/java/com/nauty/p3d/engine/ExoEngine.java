@@ -2,12 +2,16 @@ package com.nauty.p3d.engine;
 
 import android.content.Context;
 import android.graphics.SurfaceTexture;
+import android.media.MediaFormat;
 import android.net.Uri;
+import android.os.Build;
+import android.os.Handler;
 import android.util.Log;
 import android.view.Surface;
 
 import androidx.annotation.OptIn;
 import androidx.media3.common.C;
+import androidx.media3.common.ColorInfo;
 import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MimeTypes;
@@ -23,9 +27,14 @@ import androidx.media3.common.util.UnstableApi;
 import androidx.media3.decoder.ffmpeg.FfmpegLibrary;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.Renderer;
+import androidx.media3.exoplayer.mediacodec.MediaCodecAdapter;
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.exoplayer.source.MediaSource;
 import androidx.media3.exoplayer.source.MergingMediaSource;
+import androidx.media3.exoplayer.video.MediaCodecVideoRenderer;
+import androidx.media3.exoplayer.video.VideoRendererEventListener;
 
 import com.nauty.p3d.net.NetDataSourceFactory;
 
@@ -58,7 +67,7 @@ public class ExoEngine implements VideoEngine {
         //
         // PREFER 로 두는 이유: 기기 디코더가 있는 코덱(AAC 등)까지 FFmpeg 이 가져가면
         // 손해지만, 실제로 확장 렌더러는 자기가 지원하는 포맷만 받는다.
-        DefaultRenderersFactory renderers = new DefaultRenderersFactory(ctx)
+        DefaultRenderersFactory renderers = new ToneMappingRenderersFactory(ctx)
                 .setExtensionRendererMode(
                         DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER);
         Log.i(TAG, "FFmpeg 오디오 확장: "
@@ -102,6 +111,16 @@ public class ExoEngine implements VideoEngine {
 
                 for (Tracks.Group g : tracks.getGroups()) {
                     int type = g.getType();
+                    if (type == C.TRACK_TYPE_VIDEO) {
+                        // 색이 이상할 때 파일이 HDR/BT.2020 인지 logcat 으로 바로 볼 수 있게.
+                        for (int i = 0; i < g.length; i++) {
+                            Format f = g.getTrackFormat(i);
+                            Log.i(TAG, "영상 트랙 " + f.sampleMimeType + " " + f.width + "x" + f.height
+                                    + " color=" + describe(f.colorInfo)
+                                    + (g.isTrackSelected(i) ? " [선택됨]" : ""));
+                        }
+                        continue;
+                    }
                     if (type != C.TRACK_TYPE_AUDIO && type != C.TRACK_TYPE_TEXT) continue;
 
                     for (int i = 0; i < g.length; i++) {
@@ -222,6 +241,64 @@ public class ExoEngine implements VideoEngine {
     }
 
     /** 트랙 선택기에 보일 이름. 이름 -> 언어 -> "오디오"/"자막" 순으로 고르고 코덱을 덧붙인다. */
+    /** colorSpace 1=BT709 2=BT601 6=BT2020, transfer 3=SDR 6=PQ(ST2084) 7=HLG, range 1=limited 2=full. */
+    private static String describe(ColorInfo c) {
+        if (c == null) return "none";
+        return "space=" + c.colorSpace + " transfer=" + c.colorTransfer + " range=" + c.colorRange
+                + " bits=" + c.lumaBitdepth + (ColorInfo.isTransferHdr(c) ? " HDR" : " SDR");
+    }
+
+    /**
+     * HDR(PQ/HLG) 영상을 디코더가 SDR(BT.709)로 톤매핑해 내보내게 한다 (Android 13+).
+     *
+     * 우리 GL 경로는 OES 텍스처 값을 변환 없이 그대로 쓴다. 보통 플레이어는 SurfaceFlinger 가
+     * HDR→SDR 을 해 주지만 우리는 FBO 로 받아 위빙하므로 그 단계가 없다 — HDR 을 그대로
+     * 받으면 빨강이 오렌지로 빠지고 전체가 뿌옇게 보인다. 디코더가 요청을 지원하면
+     * (Snapdragon 계열은 지원) 여기서 끝난다. 기본 렌더러 목록을 그대로 만든 뒤
+     * MediaCodecVideoRenderer 만 우리 것으로 바꿔 끼운다 — 확장 렌더러 순서는 유지.
+     */
+    private static final class ToneMappingRenderersFactory extends DefaultRenderersFactory {
+        ToneMappingRenderersFactory(Context ctx) { super(ctx); }
+
+        @Override
+        protected void buildVideoRenderers(Context ctx, int extensionRendererMode,
+                MediaCodecSelector selector, boolean enableDecoderFallback, Handler eventHandler,
+                VideoRendererEventListener eventListener, long allowedVideoJoiningTimeMs,
+                ArrayList<Renderer> out) {
+            super.buildVideoRenderers(ctx, extensionRendererMode, selector, enableDecoderFallback,
+                    eventHandler, eventListener, allowedVideoJoiningTimeMs, out);
+            for (int i = 0; i < out.size(); i++) {
+                if (out.get(i).getClass() == MediaCodecVideoRenderer.class) {
+                    out.set(i, new ToneMappingVideoRenderer(ctx, getCodecAdapterFactory(), selector,
+                            allowedVideoJoiningTimeMs, enableDecoderFallback, eventHandler,
+                            eventListener, MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY));
+                }
+            }
+        }
+    }
+
+    private static final class ToneMappingVideoRenderer extends MediaCodecVideoRenderer {
+        ToneMappingVideoRenderer(Context ctx, MediaCodecAdapter.Factory adapterFactory,
+                MediaCodecSelector selector, long joiningMs, boolean fallback, Handler h,
+                VideoRendererEventListener l, int maxDropped) {
+            super(ctx, adapterFactory, selector, joiningMs, fallback, h, l, maxDropped);
+        }
+
+        @Override
+        protected MediaFormat getMediaFormat(Format format, String codecMimeType,
+                CodecMaxValues codecMaxValues, float codecOperatingRate,
+                boolean deviceNeedsNoPostProcessWorkaround, int tunnelingAudioSessionId) {
+            MediaFormat mf = super.getMediaFormat(format, codecMimeType, codecMaxValues,
+                    codecOperatingRate, deviceNeedsNoPostProcessWorkaround, tunnelingAudioSessionId);
+            if (Build.VERSION.SDK_INT >= 33 && ColorInfo.isTransferHdr(format.colorInfo)) {
+                mf.setInteger(MediaFormat.KEY_COLOR_TRANSFER_REQUEST,
+                        MediaFormat.COLOR_TRANSFER_SDR_VIDEO);
+                Log.i(TAG, "HDR 영상 → 디코더에 SDR 톤매핑 요청: " + describe(format.colorInfo));
+            }
+            return mf;
+        }
+    }
+
     private static String trackLabel(Format f, int type) {
         StringBuilder sb = new StringBuilder();
         if (f.label != null) {
