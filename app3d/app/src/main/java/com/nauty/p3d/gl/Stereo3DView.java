@@ -40,6 +40,7 @@ public class Stereo3DView extends GLSurfaceView {
     private volatile SourceFormat sourceFormat = SourceFormat.MONO_2D;
     private volatile Output       output       = Output.THREE_D;
     private volatile boolean      swapLR       = false;
+    private volatile int          hdrMode      = 0;       // 0 없음, 1 PQ, 2 HLG (p3d_src.frag uHdr)
     private volatile float        depth        = 1.0f;    // 2D->3D 시어 배율
     private volatile float        bottomCut    = 1.0f;    // 1.0 = 비활성
 
@@ -159,6 +160,8 @@ public class Stereo3DView extends GLSurfaceView {
     public void setSwapLR(boolean s)            { swapLR = s;       contentChanged(); }
     public void setDepth(float d)               { depth = d;        contentChanged(); }
     public void setBottomCut(float c)           { bottomCut = c;    contentChanged(); }
+    /** Android 13 미만에서 HDR 영상일 때만 0 이 아니다 (ExoEngine.shaderHdrMode 참고). */
+    public void setHdrMode(int m)               { hdrMode = m;      contentChanged(); }
 
     /**
      * 수렴 보정 (화면 시차 픽셀). 0 이면 소스 그대로.
@@ -542,6 +545,7 @@ public class Stereo3DView extends GLSurfaceView {
             int dxL = (halfW - dw) / 2;
             int dxR = halfW + dxL;
 
+            src.setHdrMode(hdrMode);
             float shearTop   = 0f;
             float shearSlope = 0f;
             // 단일 뷰로 내보낼 때는 시어를 걸지 않는다 — 시차는 받는 쪽이 만든다.
@@ -661,6 +665,7 @@ public class Stereo3DView extends GLSurfaceView {
             }
             GLES20.glViewport((int) ((surfW - sw) / 2f), (int) ((surfH - sh) / 2f),
                               Math.max(1, (int) sw), Math.max(1, (int) sh));
+            src.setHdrMode(hdrMode);
             src.draw(oesTex, stMatrix, uv[0], uv[1], uv[2], uv[3], 0f, 0f, bottomCut);
 
             // 2D 출력에서는 자막도 한 번만, 시차 없이.

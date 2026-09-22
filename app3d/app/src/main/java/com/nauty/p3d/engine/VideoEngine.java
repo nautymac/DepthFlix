@@ -27,6 +27,11 @@ public interface VideoEngine {
     interface Listener {
         /** 실제 영상 해상도가 확정됐을 때. 3D 크롭/종횡비 계산에 쓴다. */
         void onVideoSize(int width, int height);
+        /**
+         * 셰이더가 HDR->SDR 변환을 해야 하는지. 0 = 없음, 1 = PQ(HDR10), 2 = HLG.
+         * Android 13 이상은 디코더가 SDR 로 내보내므로 늘 0 이다 (ExoEngine 참고).
+         */
+        void onVideoHdr(int mode);
         void onError(String message);
         /** 오디오 트랙은 있는데 이 기기에 디코더가 없어 무음이 되는 경우. */
         void onAudioUnsupported();

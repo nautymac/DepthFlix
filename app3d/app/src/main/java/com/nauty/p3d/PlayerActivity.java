@@ -1670,6 +1670,13 @@ public class PlayerActivity extends Activity
     // --------------------------------------------------- VideoEngine.Listener
 
     @Override
+    public void onVideoHdr(final int mode) {
+        ui.post(new Runnable() {
+            @Override public void run() { glView.setHdrMode(mode); }
+        });
+    }
+
+    @Override
     public void onVideoSize(final int width, final int height) {
         ui.post(new Runnable() {
             @Override public void run() {

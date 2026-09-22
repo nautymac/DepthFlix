@@ -21,10 +21,15 @@ public class SourceRenderer {
     };
 
     private final int program;
-    private final int aPosition, aTexCoord, uSTMatrix, uShearTop, uShearSlope, uBottomCut;
+    private final int aPosition, aTexCoord, uSTMatrix, uShearTop, uShearSlope, uBottomCut, uHdr;
     private final FloatBuffer posBuf;
     private final float[] uv = new float[8];
     private final FloatBuffer uvBuf;
+
+    /** 0 = 없음, 1 = PQ, 2 = HLG (p3d_src.frag 의 uHdr). UI 스레드에서 바꾸고 draw 가 읽는다. */
+    private volatile int hdrMode = 0;
+
+    public void setHdrMode(int mode) { hdrMode = mode; }
 
     public SourceRenderer(Context ctx) {
         program = GlUtil.program(
@@ -36,6 +41,7 @@ public class SourceRenderer {
         uShearTop   = GLES20.glGetUniformLocation(program, "uShearTop");
         uShearSlope = GLES20.glGetUniformLocation(program, "uShearSlope");
         uBottomCut  = GLES20.glGetUniformLocation(program, "uBottomCut");
+        uHdr        = GLES20.glGetUniformLocation(program, "uHdr");
         posBuf = GlUtil.floats(POS);
         uvBuf  = GlUtil.floats(new float[8]);
     }
@@ -75,6 +81,7 @@ public class SourceRenderer {
         GLES20.glUniform1f(uShearTop, shearTop);
         GLES20.glUniform1f(uShearSlope, shearSlope);
         GLES20.glUniform1f(uBottomCut, bottomCut);
+        GLES20.glUniform1i(uHdr, hdrMode);
 
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
 
