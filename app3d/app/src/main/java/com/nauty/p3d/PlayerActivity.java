@@ -10,6 +10,7 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.SurfaceTexture;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -66,6 +67,11 @@ public class PlayerActivity extends Activity
     /** 유튜브 링크에서 미리 내려받아 둔 자막(.srt) 파일 경로. MainActivity.openYoutube() 참고. */
     public static final String EXTRA_SUBTITLE_PATH = "subtitle_path";
 
+    // play 배포판(스코프드 스토리지)에서만 쓰는 요청 코드 — 시스템 파일 선택창과 삭제 확인창.
+    private static final int REQ_PICK_SUBTITLE = 41;
+    private static final int REQ_DELETE        = 42;
+    private Uri pendingDeleteUri;
+
     private static final String TAG        = "P3D";
     private static final String PREFS      = "p3d";
     private static final String KEY_FORMAT = "fmt:";
@@ -75,6 +81,8 @@ public class PlayerActivity extends Activity
     private static final String KEY_POS       = "pos:";
     private static final String KEY_ASPECT    = "aspect:";
     private static final String KEY_CONV      = "conv:";
+    /** 사진 뷰어의 좌우반전. 파일별이 아니라 전체 설정 — 한 번 바꾸면 다음에도 그대로다. */
+    private static final String KEY_PHOTO_SWAP = "photo_swap";
 
     /** 끝에서 이 시간 안쪽이면 "다 봤다" 로 보고 이어보기를 하지 않는다. */
     private static final long END_MARGIN_MS  = 30_000;
@@ -185,7 +193,7 @@ public class PlayerActivity extends Activity
         root.setBackgroundColor(Color.BLACK);
 
         // 패널마다 다른 것은 "마지막 한 단계" 뿐이다 (PanelBackend 주석 참고).
-        panel = Panel.create();
+        panel = Panel.create(this);
 
         glView = new Stereo3DView(this);
         glView.setCallback(this);
@@ -250,7 +258,9 @@ public class PlayerActivity extends Activity
             if (folder == null) folder = MediaLibrary.folderOf(this, pendingUri);
             photos = MediaLibrary.list(this, MediaLibrary.Kind.IMAGE, folder);
             photoIndex = MediaLibrary.indexOf(photos, pendingUri);
-            glView.setSwapLR(true);   // 사진은 좌우반전 기본값을 켠 상태로 시작한다
+            // 사진은 좌우반전이 기본으로 켜져 있고, 사용자가 바꾼 값은 저장돼 다음에도 유지된다.
+            glView.setSwapLR(getSharedPreferences(PREFS, MODE_PRIVATE)
+                    .getBoolean(KEY_PHOTO_SWAP, true));
             beginPhoto();
             applySavedSubtitlePrefs();
             videoFile = resolveMediaFile(pendingUri);
@@ -604,6 +614,10 @@ public class PlayerActivity extends Activity
         btnSwap = panelButton(p, getString(R.string.btn_swap_off), new View.OnClickListener() {
             @Override public void onClick(View v) {
                 glView.setSwapLR(!glView.isSwapLR());
+                if (isPhoto) {
+                    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                            .putBoolean(KEY_PHOTO_SWAP, glView.isSwapLR()).apply();
+                }
                 refreshLabels();
             }
         });
@@ -816,6 +830,19 @@ public class PlayerActivity extends Activity
         }
         final Uri uri = pendingUri;
         final File file = videoFile;
+        // play 배포판(스코프드 스토리지): 남의 파일은 우리가 못 지운다 — 시스템 확인창을
+        // 띄우는 삭제 요청으로 넘기고, 결과는 onActivityResult(REQ_DELETE) 로 온다.
+        if (BuildConfig.PLAY && Build.VERSION.SDK_INT >= 30 && "content".equals(uri.getScheme())) {
+            try {
+                android.app.PendingIntent pi = MediaStore.createDeleteRequest(
+                        getContentResolver(), Collections.singletonList(uri));
+                pendingDeleteUri = uri;
+                startIntentSenderForResult(pi.getIntentSender(), REQ_DELETE, null, 0, 0, 0);
+            } catch (Exception e) {
+                Toast.makeText(this, getString(R.string.delete_failed, mediaKey), Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
         new AlertDialog.Builder(this)
                 .setTitle(R.string.dlg_delete_title)
                 .setMessage(getString(R.string.dlg_delete_message, mediaKey))
@@ -841,6 +868,11 @@ public class PlayerActivity extends Activity
             Toast.makeText(this, getString(R.string.delete_failed, mediaKey), Toast.LENGTH_LONG).show();
             return;
         }
+        afterDelete(uri);
+    }
+
+    /** 지워진 뒤: 사진은 다음 장으로, 영상은 목록으로. */
+    private void afterDelete(Uri uri) {
         if (isPhoto) {
             if (photos != null) {
                 int idx = MediaLibrary.indexOf(photos, uri);
@@ -927,21 +959,26 @@ public class PlayerActivity extends Activity
             return;
         }
 
+        // play 배포판(targetSdk 35)은 스코프드 스토리지라 남의 .srt/.smi 를 폴더째 훑을 수
+        // 없다 — 대신 "파일에서 고르기…" 항목으로 시스템 파일 선택창을 연다.
+        final boolean saf = BuildConfig.PLAY;
         final List<File> found = new ArrayList<>();
-        List<File> dirs = new ArrayList<>();
-        if (videoFile != null && videoFile.getParentFile() != null) dirs.add(videoFile.getParentFile());
-        dirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES));
-        dirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
-        dirs.add(new File(Environment.getExternalStorageDirectory(), "Subtitles"));
+        if (!saf) {
+            List<File> dirs = new ArrayList<>();
+            if (videoFile != null && videoFile.getParentFile() != null) dirs.add(videoFile.getParentFile());
+            dirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES));
+            dirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
+            dirs.add(new File(Environment.getExternalStorageDirectory(), "Subtitles"));
 
-        for (File d : dirs) {
-            if (d == null || !d.isDirectory()) continue;
-            File[] fs = d.listFiles();
-            if (fs == null) continue;
-            for (File f : fs) {
-                if (f.isFile() && Subtitles.isSubtitle(f.getName().toLowerCase(Locale.US))
-                        && !found.contains(f)) {
-                    found.add(f);
+            for (File d : dirs) {
+                if (d == null || !d.isDirectory()) continue;
+                File[] fs = d.listFiles();
+                if (fs == null) continue;
+                for (File f : fs) {
+                    if (f.isFile() && Subtitles.isSubtitle(f.getName().toLowerCase(Locale.US))
+                            && !found.contains(f)) {
+                        found.add(f);
+                    }
                 }
             }
         }
@@ -949,18 +986,20 @@ public class PlayerActivity extends Activity
         final List<TrackInfo> embedded = engine == null
                 ? Collections.<TrackInfo>emptyList() : engine.textTracks();
 
-        if (found.isEmpty() && embedded.isEmpty()) {
+        if (!saf && found.isEmpty() && embedded.isEmpty()) {
             Toast.makeText(this, R.string.sub_not_found, Toast.LENGTH_LONG).show();
             return;
         }
 
+        final int safSlot  = saf ? 1 : 0;      // 항목 1 = "파일에서 고르기…"
         final int extCount = found.size();
-        final String[] items = new String[1 + extCount + embedded.size()];
+        final String[] items = new String[1 + safSlot + extCount + embedded.size()];
         items[0] = getString(R.string.sub_none);
-        for (int i = 0; i < extCount; i++) items[1 + i] = found.get(i).getName();
+        if (saf) items[1] = getString(R.string.sub_pick_file);
+        for (int i = 0; i < extCount; i++) items[1 + safSlot + i] = found.get(i).getName();
         for (int i = 0; i < embedded.size(); i++) {
             TrackInfo t = embedded.get(i);
-            items[1 + extCount + i] = getString(R.string.sub_embedded_prefix, t.label)
+            items[1 + safSlot + extCount + i] = getString(R.string.sub_embedded_prefix, t.label)
                     + (t.imageBased ? getString(R.string.sub_image_suffix) : "");
         }
 
@@ -974,14 +1013,16 @@ public class PlayerActivity extends Activity
                         glView.setSubtitleBitmap(null);
                         if (engine != null) engine.selectTextTrack(null);
                         updateSubtitleName();
-                    } else if (which <= extCount) {
+                    } else if (saf && which == 1) {
+                        openSubtitlePicker();
+                    } else if (which <= safSlot + extCount) {
                         // 외부 파일을 고르면 내장 자막은 반드시 꺼야 한다 — 안 그러면
                         // onEmbeddedCue 가 계속 들어와 외부 자막과 겹친다.
                         selectedEmbeddedText = null;
                         if (engine != null) engine.selectTextTrack(null);
-                        loadSubtitle(found.get(which - 1));
+                        loadSubtitle(found.get(which - 1 - safSlot));
                     } else {
-                        TrackInfo t = embedded.get(which - 1 - extCount);
+                        TrackInfo t = embedded.get(which - 1 - safSlot - extCount);
                         if (t.imageBased) {
                             Toast.makeText(PlayerActivity.this,
                                     R.string.sub_image_unsupported, Toast.LENGTH_LONG).show();
@@ -996,6 +1037,79 @@ public class PlayerActivity extends Activity
                     }
                 })
                 .show();
+    }
+
+    /** play 배포판: 시스템 파일 선택창으로 .srt/.smi 를 고르게 한다 (스코프드 스토리지). */
+    private void openSubtitlePicker() {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("*/*");
+        try {
+            startActivityForResult(i, REQ_PICK_SUBTITLE);
+        } catch (Exception e) {
+            Toast.makeText(this, R.string.sub_not_found, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /**
+     * 고른 문서를 캐시로 복사해 기존 파일 로더에 넘긴다. 파서가 확장자로 SRT/SMI 를 가르므로
+     * 원래 이름을 살린다. 선택창에서 돌아오면 시스템 바가 올라와 있어 다시 내린다.
+     */
+    @Override
+    protected void onActivityResult(int req, int result, Intent data) {
+        super.onActivityResult(req, result, data);
+        hideSystemUi();
+        if (req == REQ_DELETE) {
+            Uri uri = pendingDeleteUri;
+            pendingDeleteUri = null;
+            if (result == RESULT_OK && uri != null) afterDelete(uri);
+            return;
+        }
+        if (req != REQ_PICK_SUBTITLE || result != RESULT_OK || data == null || data.getData() == null) return;
+        final Uri doc = data.getData();
+        new Thread(new Runnable() {
+            @Override public void run() {
+                final File f = copyDocumentToCache(doc);
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (f == null) {
+                            Toast.makeText(PlayerActivity.this, R.string.sub_load_failed_generic,
+                                    Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        selectedEmbeddedText = null;
+                        if (engine != null) engine.selectTextTrack(null);
+                        loadSubtitle(f);
+                    }
+                });
+            }
+        }, "subtitle-copy").start();
+    }
+
+    private File copyDocumentToCache(Uri doc) {
+        String name = null;
+        Cursor c = null;
+        try {
+            c = getContentResolver().query(doc, new String[]{android.provider.OpenableColumns.DISPLAY_NAME},
+                    null, null, null);
+            if (c != null && c.moveToFirst()) name = c.getString(0);
+        } catch (Exception ignored) {
+        } finally { if (c != null) c.close(); }
+        if (name == null || name.isEmpty()) name = "subtitle.srt";
+        if (!Subtitles.isSubtitle(name.toLowerCase(Locale.US))) return null;
+        try {
+            File out = new File(getCacheDir(), "picked_" + name);
+            try (java.io.InputStream in = getContentResolver().openInputStream(doc);
+                 java.io.FileOutputStream fos = new java.io.FileOutputStream(out)) {
+                if (in == null) return null;
+                byte[] buf = new byte[64 * 1024];
+                int n;
+                while ((n = in.read(buf)) > 0) fos.write(buf, 0, n);
+            }
+            return out;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /** {@link #pickSubtitle()} 의 SMB 판. 폴더 목록을 배경 스레드에서 받아온 뒤 같은 모양의 대화상자를 띄운다. */

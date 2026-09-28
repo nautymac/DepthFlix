@@ -1,5 +1,8 @@
 plugins { id 'com.android.application' }
 
+import javax.inject.Inject
+import org.gradle.process.ExecOperations
+
 def keystorePropsFile = rootProject.file("keystore.properties")
 def keystoreProps = new Properties()
 if (keystorePropsFile.exists()) {
@@ -13,13 +16,21 @@ android {
     defaultConfig {
         applicationId "com.nauty.p3d"
         minSdk 24             // youtubedl-android 요구치 (실기는 훨씬 위라 문제 없다)
-        targetSdk 28          // 기기가 API 26 — 레거시 저장소 접근 유지
-        versionCode 7
-        versionName "1.3.3"
+        targetSdk 28          // github 배포판: 레거시 저장소 접근 유지 (play 는 아래서 35)
+        versionCode 8
+        versionName "1.3.4"
         ndk { abiFilters 'arm64-v8a' }   // 기기가 arm64. libVLC 가 ABI 당 ~30MB 라 하나만 담는다
     }
 
+    buildFeatures { buildConfig true }
+
+    // device: 어느 기기(커넥터)냐. dist: 어디로 배포하느냐.
+    //   github — 지금까지의 빌드 그대로. targetSdk 28, 유튜브, Leia 커넥터 동봉.
+    //   play   — Google Play 내부 테스트용. targetSdk 35(스코프드 스토리지), 유튜브 없음,
+    //            Leia 커넥터를 APK 에 넣지 않고 기기의 CalibrationK68 에서 런타임 로드.
+    //            앱 ID 도 다르게 해서(com.nauty.depthflix.*) github 판과 나란히 설치된다.
     flavorDimensions.add("device")
+    flavorDimensions.add("dist")
 
     productFlavors {
         // Lume Pad 2. Original target — connector is whatever LUMEPAD2-PORT.md's
@@ -34,12 +45,31 @@ android {
         // newer CNSDK line on its system services (0.10.40/0.10.18/0.5.50 vs Lume Pad
         // 2's 0.6.200) and needs its own matching connector — the two are not
         // interchangeable (LeiaSDK.Delegate itself changed from an interface to an
-        // abstract class between these lines; see Panel.java's anonymous Delegate
+        // abstract class between these lines; see LeiaBackend's anonymous Delegate
         // for why the shared code has to stay agnostic to that).
         redmagic {
             dimension "device"
             applicationIdSuffix ".redmagic"
         }
+
+        github {
+            dimension "dist"
+            buildConfigField "boolean", "PLAY", "false"
+        }
+        play {
+            dimension "dist"
+            applicationId "com.nauty.depthflix"   // + 기기 접미사 → com.nauty.depthflix.redmagic
+            targetSdk 36          // Play 콘솔 요구(2026-09 기준 API 36 이상). 실기는 Android 13 이라 동작 차이 없음
+            versionCode 11        // play 는 github 와 별개 앱이라 따로 센다. 콘솔에 올린 적 있는 번호는 다시 못 쓴다 (7~10 사용됨)
+            versionNameSuffix "-play"
+            buildConfigField "boolean", "PLAY", "true"
+        }
+    }
+
+    sourceSets {
+        // LeiaBackend(com.leia.* 를 직접 참조하는 유일한 클래스)는 github 에서만 앱에
+        // 그대로 컴파일한다. play 는 아래 leiabridge 태스크가 따로 dex 로 만든다.
+        github { java.srcDirs += 'src/leiabridge/java' }
     }
 
     compileOptions {
@@ -77,6 +107,83 @@ android {
     lint { abortOnError false }
 }
 
+/**
+ * play 배포판용: src/leiabridge/java 를 따로 컴파일한 결과를 d8 로 dex 하나로 만든다.
+ * 앱은 이걸 assets/leiabridge.dex 로 품고, 실행 시 기기의 CalibrationK68 APK 와 함께
+ * DexClassLoader 에 올린다 (src/play/.../panel/Panel.java 참고).
+ */
+abstract class DexLeiaBridge extends DefaultTask {
+    @InputDirectory abstract DirectoryProperty getClassesDir()
+    @InputFiles abstract ConfigurableFileCollection getLibs()
+    @Input abstract Property<String> getD8Path()
+    @OutputDirectory abstract DirectoryProperty getOutputDir()
+    @Inject abstract ExecOperations getExecOps()
+
+    @TaskAction
+    void run() {
+        File out = outputDir.get().asFile
+        out.deleteDir(); out.mkdirs()
+        List<String> args = [d8Path.get(), '--min-api', '24', '--output', out.absolutePath]
+        libs.files.each { args += ['--lib', it.absolutePath] }
+        classesDir.asFileTree.matching { include '**/*.class' }.files.each { args += it.absolutePath }
+        execOps.exec { commandLine args }
+        File dex = new File(out, 'classes.dex')
+        if (!dex.exists()) throw new GradleException("d8 가 classes.dex 를 만들지 않았다")
+        dex.renameTo(new File(out, 'leiabridge.dex'))
+    }
+}
+
+androidComponents {
+    // Lume Pad 2 는 Play 에 올리지 않는다 (실기도 없다). lumepadPlay 는 만들지 않는다.
+    beforeVariants(selector().withFlavor(new kotlin.Pair("device", "lumepad"))
+                             .withFlavor(new kotlin.Pair("dist", "play"))) { it.enable = false }
+
+    // redmagic + github: 커넥터 jar 를 실행 시에도 동봉한다 (위 dependencies 주석 참고).
+    onVariants(selector().withFlavor(new kotlin.Pair("device", "redmagic"))
+                         .withFlavor(new kotlin.Pair("dist", "github"))) { variant ->
+        variant.runtimeConfiguration.dependencies.add(
+                project.dependencies.create(fileTree(dir: 'libs/redmagic', include: ['leia-cnsdk*.jar'])))
+    }
+
+    onVariants(selector().withFlavor(new kotlin.Pair("dist", "play"))) { variant ->
+        // Leia 바이너리는 APK 에 넣지 않는다 — 라이선스 문제이기도 하고, 기기에서 꺼낸
+        // 것이라 16KB 페이지 정렬도 안 돼 있어 Play 가 거부한다.
+        variant.packaging.jniLibs.excludes.add("**/libleiaSDK-jni.so")
+        variant.packaging.jniLibs.excludes.add("**/libleiaCore-loader.so")
+        variant.packaging.jniLibs.excludes.add("**/libleiaSDK.so")
+        variant.packaging.jniLibs.excludes.add("**/libleiaspdlog.so")
+
+        String vn = variant.name.capitalize()
+        // onVariants 가 불리는 시점엔 AGP 가 javac 태스크를 아직 등록하지 않았다 —
+        // 이름은 문자열로 걸어 두고(dependsOn 은 지연 해석) 출력 폴더는 실행 때 찾는다.
+        String appCompileName = "compile${vn}JavaWithJavac"
+        def bridgeClasses = layout.buildDirectory.dir("leiabridge/${variant.name}/classes")
+
+        def compileBridge = tasks.register("compileLeiaBridge${vn}", JavaCompile) { t ->
+            t.dependsOn(appCompileName)
+            t.source = fileTree("src/leiabridge/java")
+            t.classpath = files(android.bootClasspath) +
+                    variant.compileClasspath +
+                    files({ tasks.getByName(appCompileName).destinationDirectory.get().asFile }) +
+                    fileTree(dir: 'libs/redmagic', include: ['leia-cnsdk*.jar'])
+            t.destinationDirectory.set(bridgeClasses)
+            t.sourceCompatibility = '1.8'
+            t.targetCompatibility = '1.8'
+            t.options.encoding = 'UTF-8'
+            t.options.compilerArgs += ['-Xlint:-options']
+        }
+
+        def dexBridge = tasks.register("dexLeiaBridge${vn}", DexLeiaBridge) { t ->
+            t.dependsOn(compileBridge)
+            t.classesDir.set(bridgeClasses)
+            t.libs.from(files(android.bootClasspath))
+            t.d8Path.set(android.sdkDirectory.absolutePath + "/build-tools/" + android.buildToolsVersion + "/d8.bat")
+            t.outputDir.set(layout.buildDirectory.dir("leiabridge/${variant.name}/assets"))
+        }
+        variant.sources.assets.addGeneratedSourceDirectory(dexBridge, { it.outputDir })
+    }
+}
+
 configurations.all {
     resolutionStrategy {
         // dcerpc 0.12.13 가 smbj 0.12.2 를 보고 만들어져 있다. Gradle 기본값(최고
@@ -102,13 +209,15 @@ dependencies {
     implementation 'com.rapid7.client:dcerpc:0.12.13'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
 
-    // 유튜브(실시간 포함) 링크 재생. 파이썬 3.8 + yt-dlp 실행 파일을 통째로 안드로이드
-    // 네이티브 라이브러리로 안고 있는 라이브러리다 — 서버 없이 기기 안에서 바로
-    // 스트림 주소를 뽑는다. ffmpeg 모듈(별도 아티팩트, 위의 project(':ffmpeg') 와는
-    // 다른 것)은 뺐다 — 우리는 --dump-json 으로 정보만 뽑을 뿐 합치기/후처리를
+    // 유튜브(실시간 포함) 링크 재생 — github 배포판에만. 파이썬 3.8 + yt-dlp 실행 파일을
+    // 통째로 안드로이드 네이티브 라이브러리로 안고 있는 라이브러리다 — 서버 없이 기기
+    // 안에서 바로 스트림 주소를 뽑는다. ffmpeg 모듈(별도 아티팩트, 위의 project(':ffmpeg')
+    // 와는 다른 것)은 뺐다 — 우리는 --dump-json 으로 정보만 뽑을 뿐 합치기/후처리를
     // 안 시키므로 없어도 된다. 있으면 APK 가 35MB 이상 커진다(실측).
     // Unlicense — 배포 조건 문제없다. minSdk 24 를 요구해 위에서 올렸다.
-    implementation 'io.github.junkfood02.youtubedl-android:library:0.18.1'
+    // play 에는 넣지 않는다 — 유튜브 스트림 추출은 Play 정책 위반 사유라 기능째 뺀다
+    // (src/play/.../net/YouTube.java 가 빈 스텁).
+    githubImplementation 'io.github.junkfood02.youtubedl-android:library:0.18.1'
     // youtubedl-android 가 --dump-json 결과를 파싱하는 데 쓰는 것과 같은 버전.
     // 그쪽은 implementation 으로 감춰 둬서, language·subtitles 같은 원시 필드를
     // 직접 읽으려면(YouTube.java) 우리 쪽에서 따로 컴파일 클래스패스에 올려야 한다.
@@ -116,11 +225,14 @@ dependencies {
 
     // Leia CNSDK — 기기별로 다른 커넥터(jar + jniLibs + assets/cnsdk.version)를 쓴다.
     // lumepad 는 기기의 com.moonlight.leia APK 에서 꺼낸 것(꺼내는 방법은
-    // LUMEPAD2-PORT.md 참고), redmagic 은 그 기기 자체의 ZTE/Leia 순정 앱에서 꺼낸
-    // 것 — 둘 다 재배포할 수 없어서 저장소에 넣지 않았다. 같은 이유로
+    // LUMEPAD2-PORT.md 참고), redmagic 은 그 기기 자체의 CalibrationK68 시스템 앱에서
+    // 꺼낸 것 — 둘 다 재배포할 수 없어서 저장소에 넣지 않았다. 같은 이유로
     // app/src/<flavor>/jniLibs/ 의 .so 파일들도 저장소에 없다.
     // app/src/main/assets/shaders/ 는 두 기기가 지금까지는 같은 것을 써서 공용으로
     // 뒀다 — RedMagic 실기에서 위빙이 이상하면 여기부터 의심할 것.
+    // github: 앱에 동봉. play: 컴파일에만 쓰고 실행 시엔 기기 것을 쓴다 — 그래서 redmagic
+    // 은 compileOnly 로 두고, github 변형에만 런타임 의존성을 androidComponents 에서
+    // 따로 붙인다 (Gradle 에 redmagicGithubImplementation 같은 조합 설정은 없다).
     lumepadImplementation fileTree(dir: 'libs/lumepad', include: ['leia-cnsdk*.jar'])
-    redmagicImplementation fileTree(dir: 'libs/redmagic', include: ['leia-cnsdk*.jar'])
+    redmagicCompileOnly   fileTree(dir: 'libs/redmagic', include: ['leia-cnsdk*.jar'])
 }

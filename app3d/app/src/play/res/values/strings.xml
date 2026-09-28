@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- play 배포판은 github 판과 나란히 설치되므로 런처에서 구별되게 이름을 달리한다. -->
+<resources>
+    <string name="app_name">DepthFlix Play</string>
+</resources>

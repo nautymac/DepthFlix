@@ -41,6 +41,9 @@
         <package android:name="com.leiainc.media.service" />
         <package android:name="com.leia.headtrackingservice" />
         <package android:name="com.leialoft.display.config" />
+        <!-- RedMagic 의 CNSDK 커넥터가 든 시스템 앱. play 배포판이 여기서 런타임 로드한다
+             (src/play/.../panel/Panel.java). -->
+        <package android:name="com.leiainc.calibrationapp" />
     </queries>
 
     <application
@@ -92,33 +95,6 @@
             </intent-filter>
         </activity>
 
-        <!-- 아래는 시험 도구다. 평소 쓰지 않지만 패널 동작을 다시 확인할 때 필요하다. -->
-
-        <!-- 백라이트 비율을 서비스에 묻고 바꾼다. -->
-        <activity
-            android:name="com.nauty.p3d.leia.LeiaLightsActivity"
-            android:exported="true"/>
-
-        <!-- Leia 자신의 2D→3D 엔진(미디어 서비스)이 우리 프로세스에서 도는지
-             확인한다. LeiaMediaSDK 주석 참고. -->
-        <activity
-            android:name="com.nauty.p3d.leia.LeiaMlSpikeActivity"
-            android:exported="true"
-            android:screenOrientation="landscape"
-            android:configChanges="orientation|screenSize|keyboardHidden"/>
-
-        <!-- 정지 SBS 이미지 비교용. 같은 프레임을 여러 방식으로 합성해 번갈아
-             띄워 보면 2D→3D 방식 차이가 눈으로 바로 갈린다. -->
-        <activity
-            android:name="com.nauty.p3d.leia.LeiaImageActivity"
-            android:exported="true"
-            android:screenOrientation="landscape"
-            android:configChanges="orientation|screenSize|keyboardHidden"/>
-
-        <activity
-            android:name="com.nauty.p3d.leia.LeiaSpikeActivity"
-            android:exported="true"
-            android:screenOrientation="landscape"
-            android:configChanges="orientation|screenSize|keyboardHidden"/>
+        <!-- 시험 도구 액티비티(Leia*Activity)는 github 배포판에만 있다 — src/github/AndroidManifest.xml. -->
     </application>
 </manifest>

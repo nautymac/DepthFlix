@@ -143,15 +143,33 @@ public class MainActivity extends Activity {
 
         setContentView(root);
 
-        if (Build.VERSION.SDK_INT >= 23
-                && checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
-                   != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQ_PERM);
+        if (!hasStoragePermission()) {
+            requestPermissions(storagePermissions(), REQ_PERM);
         } else {
             reload();
         }
 
         handleShareIntent(getIntent());
+    }
+
+    /**
+     * play 배포판(targetSdk 35)은 READ_EXTERNAL_STORAGE 가 아무 뜻이 없고 미디어 종류별
+     * 권한을 받아야 MediaStore 가 남의 파일을 보여준다. github 판(targetSdk 28)은 예전대로.
+     */
+    private static String[] storagePermissions() {
+        if (BuildConfig.PLAY && Build.VERSION.SDK_INT >= 33) {
+            return new String[]{Manifest.permission.READ_MEDIA_VIDEO,
+                                Manifest.permission.READ_MEDIA_IMAGES};
+        }
+        return new String[]{Manifest.permission.READ_EXTERNAL_STORAGE};
+    }
+
+    private boolean hasStoragePermission() {
+        if (Build.VERSION.SDK_INT < 23) return true;
+        for (String p : storagePermissions()) {
+            if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) return false;
+        }
+        return true;
     }
 
     /**
@@ -205,13 +223,11 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (Build.VERSION.SDK_INT >= 23
-                && checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
-                   != PackageManager.PERMISSION_GRANTED) {
-            return;
-        }
+        if (!hasStoragePermission()) return;
         reload();
-        scanUnindexed();
+        // 스코프드 스토리지(play)에서는 저장소를 직접 훑을 수 없다 — MediaStore 가 색인한
+        // 파일만 보인다. 색인은 Android 의 미디어 스캐너가 한다.
+        if (!BuildConfig.PLAY) scanUnindexed();
     }
 
     private void reload() {

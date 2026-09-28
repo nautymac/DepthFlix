@@ -56,3 +56,7 @@ target_link_libraries(ffmpegJNI
 if(ANDROID_ABI STREQUAL "arm64-v8a")
     target_link_options(ffmpegJNI PRIVATE "-Wl,-Bsymbolic")
 endif()
+
+# 16KB 페이지 크기 기기 지원 (Google Play 가 신규 앱에 요구). NDK 26 의 기본값은 4KB 라
+# LOAD 세그먼트 정렬을 직접 올려야 한다 — llvm-readelf -l 로 Align 0x4000 을 확인할 것.
+target_link_options(ffmpegJNI PRIVATE "-Wl,-z,max-page-size=16384")

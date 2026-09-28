@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- targetSdk 35: 저장소 권한은 미디어 종류별로 받는다 (MainActivity.storagePermissions). -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+
+    <!-- Play 정책상 사유 없이는 못 쓰는 권한. 필요한 패키지는 <queries> 로 선언돼 있다. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:node="remove"/>
+    <!-- 시험 도구(github 전용)만 쓰던 권한 — 심사 항목만 늘린다. -->
+    <uses-permission android:name="android.permission.CAMERA" tools:node="remove"/>
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:node="remove"/>
+</manifest>
