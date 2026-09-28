@@ -11,4 +11,8 @@
     <!-- 시험 도구(github 전용)만 쓰던 권한 — 심사 항목만 늘린다. -->
     <uses-permission android:name="android.permission.CAMERA" tools:node="remove"/>
     <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:node="remove"/>
+
+    <!-- SMB 계정이 평문 SharedPreferences 에 있다. 자동 백업에 실려 기기 밖으로 나가지 않게
+         play 판은 백업을 끈다 — 개인정보처리방침의 "기기에만 저장" 과 맞추기 위해서다. -->
+    <application android:allowBackup="false" tools:replace="android:allowBackup"/>
 </manifest>

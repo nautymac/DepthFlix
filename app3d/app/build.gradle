@@ -60,7 +60,7 @@ android {
             dimension "dist"
             applicationId "com.nauty.depthflix"   // + 기기 접미사 → com.nauty.depthflix.redmagic
             targetSdk 36          // Play 콘솔 요구(2026-09 기준 API 36 이상). 실기는 Android 13 이라 동작 차이 없음
-            versionCode 11        // play 는 github 와 별개 앱이라 따로 센다. 콘솔에 올린 적 있는 번호는 다시 못 쓴다 (7~10 사용됨)
+            versionCode 12        // play 는 github 와 별개 앱이라 따로 센다. 콘솔에 올린 적 있는 번호는 다시 못 쓴다 (7~11 사용됨)
             versionNameSuffix "-play"
             buildConfigField "boolean", "PLAY", "true"
         }
