@@ -45,6 +45,19 @@ import java.util.List;
 public class MainActivity extends Activity {
 
     private static final int REQ_PERM = 1;
+    private static final int REQ_USB = 2;
+
+    // ---- USB 드라이브 (UsbLibrary) ----
+    /** USB 를 둘러보는 중인가. 그동안 목록은 USB 의 폴더·파일이다. */
+    private boolean usbMode = false;
+    private Uri usbTree;
+    /** 들어온 폴더들: {문서 ID, 이름}. 맨 앞이 고른 폴더(뿌리). */
+    private final List<String[]> usbPath = new ArrayList<>();
+    private List<UsbLibrary.Entry> usbEntries = new ArrayList<>();
+    /** 늦게 끝난 목록 읽기가 그 사이 옮겨 간 화면을 덮어쓰지 않게. */
+    private int usbLoadSeq = 0;
+    /** 마지막으로 보여준 USB 폴더. 다른 폴더로 옮겼을 때만 맨 위로 보낸다. */
+    private String usbShownDoc;
 
     private final List<String> titles = new ArrayList<>();
     private final List<Uri>    uris   = new ArrayList<>();
@@ -87,8 +100,13 @@ public class MainActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         btnMode = addButton(row, getString(R.string.mode_photos), new View.OnClickListener() {
             @Override public void onClick(View v) {
-                kind = (kind == MediaLibrary.Kind.VIDEO)
-                        ? MediaLibrary.Kind.IMAGE : MediaLibrary.Kind.VIDEO;
+                if (usbMode) {
+                    // USB 에서 나와 기기 목록으로 돌아간다. 종류는 그대로.
+                    usbMode = false;
+                } else {
+                    kind = (kind == MediaLibrary.Kind.VIDEO)
+                            ? MediaLibrary.Kind.IMAGE : MediaLibrary.Kind.VIDEO;
+                }
                 openFolder = null;
                 reload();
             }
@@ -96,6 +114,14 @@ public class MainActivity extends Activity {
         addButton(row, getString(R.string.open_url), new View.OnClickListener() {
             @Override public void onClick(View v) { chooseNetworkSource(); }
         });
+        // USB 드라이브. 한 번 고르면 다음부터 바로 열고, 길게 누르면 다시 고른다.
+        Button usb = addButton(row, getString(R.string.usb), new View.OnClickListener() {
+            @Override public void onClick(View v) { openUsb(false); }
+        });
+        usb.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override public boolean onLongClick(View v) { openUsb(true); return true; }
+        });
+        ((LinearLayout.LayoutParams) usb.getLayoutParams()).weight = 0.5f;
         root.addView(row);
 
         crumb = new TextView(this);
@@ -114,6 +140,10 @@ public class MainActivity extends Activity {
         list = new ListView(this);
         list.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override public void onItemClick(AdapterView<?> p, View v, int pos, long id) {
+                if (usbMode) {
+                    onUsbItem(pos);
+                    return;
+                }
                 if (openFolder == null) {
                     if (pos >= 0 && pos < folders.size()) {
                         openFolder = folders.get(pos).path;
@@ -127,7 +157,7 @@ public class MainActivity extends Activity {
         // 자주 여는 폴더는 위로 고정한다. 길게 눌러 켜고 끈다.
         list.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
             @Override public boolean onItemLongClick(AdapterView<?> p, View v, int pos, long id) {
-                if (openFolder != null || pos < 0 || pos >= folders.size()) return false;
+                if (usbMode || openFolder != null || pos < 0 || pos >= folders.size()) return false;
                 String path = folders.get(pos).path;
                 boolean on = MediaLibrary.toggleFavorite(MainActivity.this, path);
                 Toast.makeText(MainActivity.this,
@@ -209,6 +239,16 @@ public class MainActivity extends Activity {
     /** 폴더 목록에서 뒤로 = 앱 종료, 파일 목록에서 뒤로 = 폴더 목록. */
     @Override
     public void onBackPressed() {
+        if (usbMode) {
+            // 한 단계 위로. 고른 폴더(뿌리)에서 더 나가면 기기 목록으로 돌아간다.
+            if (usbPath.size() > 1) {
+                usbPath.remove(usbPath.size() - 1);
+            } else {
+                usbMode = false;
+            }
+            reload();
+            return;
+        }
         if (openFolder != null) {
             openFolder = null;
             reload();
@@ -232,6 +272,12 @@ public class MainActivity extends Activity {
 
     private void reload() {
         boolean photo = (kind == MediaLibrary.Kind.IMAGE);
+        if (usbMode) {
+            // USB 에서는 이 버튼이 "기기 목록으로" 다.
+            btnMode.setText(photo ? R.string.mode_photos : R.string.mode_videos);
+            loadUsb();
+            return;
+        }
         btnMode.setText(photo ? R.string.mode_videos : R.string.mode_photos);
 
         if (openFolder == null) loadFolders(photo);
@@ -933,6 +979,106 @@ public class MainActivity extends Activity {
                     }
                 })
                 .show();
+    }
+
+    // ------------------------------------------------------------- USB
+
+    /**
+     * USB 드라이브를 연다. 전에 골라 둔 것이 있으면 바로, 없거나 repick 이면 폴더 선택 창.
+     * 꽂은 USB 는 일반 목록에 안 잡혀서(UsbLibrary 주석) 이 길로만 읽힌다.
+     */
+    private void openUsb(boolean repick) {
+        Uri tree = repick ? null : UsbLibrary.savedTree(this);
+        if (tree == null) {
+            Toast.makeText(this, R.string.usb_pick_hint, Toast.LENGTH_LONG).show();
+            try {
+                startActivityForResult(UsbLibrary.pickIntent(this), REQ_USB);
+            } catch (Exception e) {
+                Toast.makeText(this, R.string.usb_no_access, Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
+        enterUsb(tree);
+    }
+
+    private void enterUsb(Uri tree) {
+        usbTree = tree;
+        usbPath.clear();
+        usbPath.add(new String[]{UsbLibrary.rootDocId(tree), getString(R.string.usb_root)});
+        usbMode = true;
+        reload();
+    }
+
+    @Override
+    protected void onActivityResult(int req, int result, Intent data) {
+        super.onActivityResult(req, result, data);
+        if (req != REQ_USB || result != RESULT_OK || data == null || data.getData() == null) return;
+        UsbLibrary.saveTree(this, data.getData());
+        enterUsb(data.getData());
+    }
+
+    /** 지금 USB 폴더의 내용. 드라이브가 느릴 수 있어 따로 읽는다. */
+    private void loadUsb() {
+        final Uri tree = usbTree;
+        final String[] here = usbPath.get(usbPath.size() - 1);
+        final int seq = ++usbLoadSeq;
+        StringBuilder where = new StringBuilder();
+        for (String[] p : usbPath) {
+            if (where.length() > 0) where.append('/');
+            where.append(p[1]);
+        }
+        final String crumbText = where.toString();
+        crumb.setText(getString(R.string.crumb_in_folder, crumbText, 0));
+        new Thread(new Runnable() {
+            @Override public void run() {
+                final List<UsbLibrary.Entry> entries = UsbLibrary.children(MainActivity.this, tree, here[0]);
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (seq != usbLoadSeq || !usbMode) return;
+                        usbEntries = entries;
+                        titles.clear();
+                        uris.clear();
+                        List<String> display = new ArrayList<>();
+                        int files = 0;
+                        for (UsbLibrary.Entry e : entries) {
+                            if (e.dir) {
+                                display.add("📁 " + e.name);
+                            } else {
+                                files++;
+                                SourceFormat f = e.photo ? null : SourceFormat.fromName(e.name);
+                                display.add((e.photo ? "🖼 " : "🎬 ") + e.name
+                                        + (f == null ? "" : "   [" + f.label(MainActivity.this) + "]"));
+                            }
+                        }
+                        crumb.setText(getString(R.string.crumb_in_folder, crumbText, files));
+                        openFolder = null;
+                        show(display, getString(R.string.usb_empty));
+                        // 다른 USB 폴더로 옮겼으면 맨 위부터. 플레이어에서 돌아온 같은
+                        // 폴더면 보던 자리 그대로 (show 의 sameView 는 USB 폴더를 모른다).
+                        if (!here[0].equals(usbShownDoc)) list.setSelection(0);
+                        usbShownDoc = here[0];
+                    }
+                });
+            }
+        }).start();
+    }
+
+    private void onUsbItem(int pos) {
+        if (pos < 0 || pos >= usbEntries.size()) return;
+        UsbLibrary.Entry e = usbEntries.get(pos);
+        if (e.dir) {
+            usbPath.add(new String[]{e.docId, e.name});
+            reload();
+            return;
+        }
+        Intent i = new Intent(this, PlayerActivity.class);
+        i.setData(e.uri);
+        i.putExtra(PlayerActivity.EXTRA_TITLE, e.name);
+        // 사진은 이전/다음을, 영상은 옆의 자막을 이 USB 폴더 안에서 찾는다.
+        i.putExtra(PlayerActivity.EXTRA_USB_TREE, usbTree.toString());
+        i.putExtra(PlayerActivity.EXTRA_USB_DOC, usbPath.get(usbPath.size() - 1)[0]);
+        if (e.photo) i.putExtra(PlayerActivity.EXTRA_PHOTO, true);
+        startActivity(i);
     }
 
     private void open(Uri uri, String title) { open(uri, title, null); }

@@ -64,6 +64,9 @@ public class PlayerActivity extends Activity
      * 도는 건 뜻이 없다 — 지금 보고 있던 묶음 안에서 넘기는 것이 자연스럽다.
      */
     public static final String EXTRA_FOLDER = "folder";
+    /** USB 에서 연 사진: 넘겨 보기 목록을 이 트리의 이 폴더(문서 ID)에서 만든다. */
+    public static final String EXTRA_USB_TREE = "usb_tree";
+    public static final String EXTRA_USB_DOC = "usb_doc";
     /** 유튜브 링크에서 미리 내려받아 둔 자막(.srt) 파일 경로. MainActivity.openYoutube() 참고. */
     public static final String EXTRA_SUBTITLE_PATH = "subtitle_path";
 
@@ -293,10 +296,17 @@ public class PlayerActivity extends Activity
         if (isPhoto) {
             // 이전/다음 사진으로 넘기려면 목록이 필요하다. 목록 화면과 같은 정렬을
             // 다시 돌려서 지금 사진의 자리를 찾는다 (MediaLibrary 주석 참고).
-            String folder = getIntent().getStringExtra(EXTRA_FOLDER);
-            // 다른 앱이 인텐트로 넘겨준 사진이면 폴더를 모른다. 파일 경로에서 되찾는다.
-            if (folder == null) folder = MediaLibrary.folderOf(this, pendingUri);
-            photos = MediaLibrary.list(this, MediaLibrary.Kind.IMAGE, folder);
+            String usbTree = getIntent().getStringExtra(EXTRA_USB_TREE);
+            String usbDoc = getIntent().getStringExtra(EXTRA_USB_DOC);
+            if (usbTree != null && usbDoc != null) {
+                // USB 드라이브는 MediaStore 에 없다 — 같은 USB 폴더의 사진으로 목록을 만든다.
+                photos = UsbLibrary.photos(this, Uri.parse(usbTree), usbDoc);
+            } else {
+                String folder = getIntent().getStringExtra(EXTRA_FOLDER);
+                // 다른 앱이 인텐트로 넘겨준 사진이면 폴더를 모른다. 파일 경로에서 되찾는다.
+                if (folder == null) folder = MediaLibrary.folderOf(this, pendingUri);
+                photos = MediaLibrary.list(this, MediaLibrary.Kind.IMAGE, folder);
+            }
             photoIndex = MediaLibrary.indexOf(photos, pendingUri);
             // 사진은 좌우반전이 기본으로 켜져 있고, 사용자가 바꾼 값은 저장돼 다음에도 유지된다.
             glView.setSwapLR(getSharedPreferences(PREFS, MODE_PRIVATE)
@@ -947,9 +957,59 @@ public class PlayerActivity extends Activity
             return;
         }
 
+        // USB 드라이브의 영상도 파일 경로가 없다 (UsbLibrary 주석). 같은 USB 폴더를
+        // 폴더 선택 허락으로 훑어 이름이 겹치는 자막을 찾는다.
+        final String usbTree = getIntent().getStringExtra(EXTRA_USB_TREE);
+        final String usbDoc = getIntent().getStringExtra(EXTRA_USB_DOC);
+        if (usbTree != null && usbDoc != null) {
+            final Uri videoUri = pendingUri;
+            final String videoName = mediaKey;
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    final File f = UsbLibrary.findSubtitle(PlayerActivity.this,
+                            Uri.parse(usbTree), usbDoc, videoName);
+                    runOnUiThread(new Runnable() {
+                        @Override public void run() {
+                            if (isStaleRequest(videoUri)) return;
+                            if (f != null) loadSubtitle(f); else updateSubtitleName();
+                        }
+                    });
+                }
+            }, "usb-subtitle-auto").start();
+            return;
+        }
+
         File sub = Subtitles.findSibling(videoFile);
         if (sub != null) loadSubtitle(sub);
         else updateSubtitleName();
+    }
+
+    /** 내장 자막을 자동으로 켜 볼지 (영상마다 한 번). */
+    private boolean embeddedAutoTried = false;
+
+    /**
+     * 외부 자막이 없으면 영상 안에 든 자막을 자동으로 켠다 — 한국어가 있으면 그것, 없으면
+     * 첫 텍스트 자막. 지금까지는 내장 자막이 기본으로 꺼져 있어(ExoEngine) 메뉴에서 직접
+     * 골라야만 나왔다. 외부 자막이 나중에 잡히면 loadSubtitle 이 내장 쪽을 끈다.
+     */
+    private void autoSelectEmbeddedSubtitle() {
+        if (embeddedAutoTried || engine == null || isPhoto) return;
+        if (subtitleTrack != null || selectedEmbeddedText != null) return;
+        List<TrackInfo> tracks = engine.textTracks();
+        if (tracks == null || tracks.isEmpty()) return;
+        embeddedAutoTried = true;
+        TrackInfo pick = null;
+        for (TrackInfo t : tracks) {
+            if (t.imageBased) continue;
+            String l = t.label == null ? "" : t.label.toLowerCase(Locale.US);
+            if (l.contains("ko") || l.contains("한국") || l.contains("kor")) { pick = t; break; }
+            if (pick == null) pick = t;
+        }
+        if (pick == null) return;
+        selectedEmbeddedText = pick;
+        engine.selectTextTrack(pick);
+        updateSubtitleName();
+        Toast.makeText(this, getString(R.string.sub_embedded_prefix, pick.label), Toast.LENGTH_SHORT).show();
     }
 
     private void autoLoadSubtitleSmb(final Uri videoUri) {
@@ -973,6 +1033,11 @@ public class PlayerActivity extends Activity
     }
 
     private void loadSubtitle(File f) {
+        // 외부 자막이 들어오면 자동으로 켰던 내장 자막은 끈다 (겹쳐 보이지 않게).
+        if (selectedEmbeddedText != null) {
+            selectedEmbeddedText = null;
+            if (engine != null) engine.selectTextTrack(null);
+        }
         subtitleTrack = Subtitles.load(f);
         lastCueText = null;
         glView.setSubtitleBitmap(null);
@@ -1010,6 +1075,12 @@ public class PlayerActivity extends Activity
         // 없다 — 대신 "파일에서 고르기…" 항목으로 시스템 파일 선택창을 연다.
         final boolean saf = BuildConfig.PLAY;
         final List<File> found = new ArrayList<>();
+        // USB 영상: 같은 USB 폴더의 자막 (캐시로 복사해 둔 것).
+        String usbTree = getIntent().getStringExtra(EXTRA_USB_TREE);
+        String usbDoc = getIntent().getStringExtra(EXTRA_USB_DOC);
+        if (usbTree != null && usbDoc != null) {
+            found.addAll(UsbLibrary.allSubtitles(this, Uri.parse(usbTree), usbDoc));
+        }
         if (!saf) {
             List<File> dirs = new ArrayList<>();
             if (videoFile != null && videoFile.getParentFile() != null) dirs.add(videoFile.getParentFile());
@@ -1860,6 +1931,11 @@ public class PlayerActivity extends Activity
                     }
                 }
                 refreshLabels();
+                // 트랙 목록이 다 잡힌 뒤에 본다. 외부 자막 찾기(USB·SMB)가 아직 진행 중이면
+                // 그쪽이 끝날 시간을 조금 준다.
+                ui.postDelayed(new Runnable() {
+                    @Override public void run() { autoSelectEmbeddedSubtitle(); }
+                }, 1500);
             }
         });
     }

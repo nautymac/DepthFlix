@@ -139,4 +139,11 @@
     <string name="delete_unsupported">이 소스는 삭제할 수 없습니다 (네트워크 파일).</string>
     <string name="delete_failed">삭제하지 못했습니다: %s</string>
     <string name="action_delete">삭제</string>
+
+    <!-- USB 드라이브: 시스템 폴더 선택으로 읽는다 (UsbLibrary). -->
+    <string name="usb">USB</string>
+    <string name="usb_pick_hint">USB 드라이브(또는 그 안의 폴더)를 고른 뒤 \"이 폴더 사용\"을 눌러 주세요. 나중에 다른 드라이브를 고르려면 USB 버튼을 길게 누르세요.</string>
+    <string name="usb_no_access">USB 드라이브를 읽을 수 없습니다. 꽂은 뒤 다시 골라 주세요.</string>
+    <string name="usb_root">USB</string>
+    <string name="usb_empty">여기에는 영상이나 사진이 없습니다.</string>
 </resources>
