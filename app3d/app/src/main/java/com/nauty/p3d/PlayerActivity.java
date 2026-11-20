@@ -242,6 +242,46 @@ public class PlayerActivity extends Activity
             }
         });
 
+        // 사진: 좌우로 밀어 다음 / 이전 장. 밀어서 넘길 때는 파일 이름을 띄우지 않는다
+        // (그림만 이어서 보려는 것이라 글자가 방해된다). 톡 누르기는 그대로 재생바를 여닫는다.
+        tapTarget.setOnTouchListener(new View.OnTouchListener() {
+            private float downX, downY;
+            private boolean tracking;
+
+            @Override public boolean onTouch(View v, android.view.MotionEvent e) {
+                if (!isPhoto) return false;
+                switch (e.getActionMasked()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        downX = e.getX();
+                        downY = e.getY();
+                        tracking = true;
+                        break;
+                    case android.view.MotionEvent.ACTION_POINTER_DOWN:
+                    case android.view.MotionEvent.ACTION_CANCEL:
+                        tracking = false;   // 두 손가락이나 취소는 넘기기가 아니다
+                        break;
+                    case android.view.MotionEvent.ACTION_UP: {
+                        if (!tracking) break;
+                        tracking = false;
+                        float dx = e.getX() - downX;
+                        float dy = e.getY() - downY;
+                        boolean swipe = Math.abs(dx) >= dp(60) && Math.abs(dx) > 2f * Math.abs(dy);
+                        if (swipe && photos != null && photos.size() > 1) {
+                            // 누르기로 처리되지 않게 여기서 끝낸다 (재생바가 같이 열리지 않도록).
+                            v.setPressed(false);
+                            v.cancelLongPress();
+                            showPhoto(dx < 0 ? 1 : -1, true);   // 왼쪽으로 밀면 다음 장
+                            return true;
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
+                return false;
+            }
+        });
+
         setContentView(root);
 
         String name = getIntent().getStringExtra(EXTRA_TITLE);
@@ -375,6 +415,11 @@ public class PlayerActivity extends Activity
 
     /** 목록에서 delta 만큼 떨어진 사진으로 넘어간다. 끝에서는 반대편으로 돈다. */
     private void showPhoto(int delta) {
+        showPhoto(delta, false);
+    }
+
+    /** quiet: 몇 번째 / 파일 이름 알림을 띄우지 않는다 (밀어서 넘길 때). */
+    private void showPhoto(int delta, boolean quiet) {
         if (photos == null || photos.isEmpty()) return;
         if (photoIndex < 0) photoIndex = 0;
         int n = photos.size();
@@ -396,8 +441,10 @@ public class PlayerActivity extends Activity
         applySavedGeometryPrefs();
         videoFile = resolveMediaFile(pendingUri);
 
-        Toast.makeText(this, (photoIndex + 1) + " / " + n + "  " + it.name,
-                Toast.LENGTH_SHORT).show();
+        if (!quiet) {
+            Toast.makeText(this, (photoIndex + 1) + " / " + n + "  " + it.name,
+                    Toast.LENGTH_SHORT).show();
+        }
         beginPhoto();
         refreshLabels();
     }
