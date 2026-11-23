@@ -95,12 +95,46 @@ public final class UsbLibrary {
     private static final String EXTERNAL = "com.android.externalstorage.documents";
 
     /** 이 트리가 있는 볼륨("1234-ABCD"). 내장 저장소나 다른 제공자면 null — 해제할 것이 없다. */
-    private static String volumeOf(Uri tree) {
+    public static String volumeOf(Uri tree) {
         if (tree == null || !EXTERNAL.equals(tree.getAuthority())) return null;
         String id = rootDocId(tree);
         int colon = id.indexOf(':');
         String root = colon < 0 ? id : id.substring(0, colon);
         return root.isEmpty() || "primary".equals(root) || "home".equals(root) ? null : root;
+    }
+
+    /**
+     * 지금 꽂혀(마운트돼) 있는 뺄 수 있는 드라이브의 볼륨 이름("2CB8-C259"). 없으면 null.
+     * 앱의 허락(트리 권한)이 없어도 알 수 있다.
+     */
+    public static String mountedVolume(Context ctx) {
+        StorageManager sm = (StorageManager) ctx.getSystemService(Context.STORAGE_SERVICE);
+        if (sm == null) return null;
+        for (StorageVolume v : sm.getStorageVolumes()) {
+            if (!v.isPrimary() && v.isRemovable() && v.getUuid() != null
+                    && android.os.Environment.MEDIA_MOUNTED.equals(v.getState())) {
+                return v.getUuid();
+            }
+        }
+        return null;
+    }
+
+    /** 이 볼륨이 아직 마운트돼 있는가. */
+    public static boolean isMounted(Context ctx, String volume) {
+        if (volume == null) return false;
+        StorageManager sm = (StorageManager) ctx.getSystemService(Context.STORAGE_SERVICE);
+        if (sm == null) return false;
+        for (StorageVolume v : sm.getStorageVolumes()) {
+            if (volume.equals(v.getUuid())) {
+                return android.os.Environment.MEDIA_MOUNTED.equals(v.getState());
+            }
+        }
+        return false;
+    }
+
+    /** 볼륨의 뿌리 트리. 읽는 데는 못 쓰고(허락이 없다), 해제 화면을 찾는 데만 쓴다. */
+    public static Uri volumeTree(String volume) {
+        return DocumentsContract.buildTreeDocumentUri(EXTERNAL, volume + ":");
     }
 
     /** 해제할 수 있는 종류(뺄 수 있는 드라이브)인가. */

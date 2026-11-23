@@ -143,7 +143,7 @@
     <string name="action_delete">Delete</string>
 
     <!-- USB drives: read through the system folder picker (UsbLibrary). -->
-    <string name="usb">USB</string>
+    <string name="usb">Eject USB</string>
     <string name="usb_pick_hint">Choose the USB drive (or a folder on it) and tap “Use this folder”. Long-press USB to pick another one later.</string>
     <string name="usb_no_access">No access to the USB drive. Plug it in and pick it again.</string>
     <string name="recent_row">▶ Continue: %s</string>
@@ -156,10 +156,10 @@
     <string name="recent_btn_off">Continue row on the list: off</string>
     <string name="usb_root">USB</string>
     <string name="usb_first_title">Open the USB drive</string>
-    <string name="usb_first_msg">Allow DepthFlix to read the USB drive, just this once.\n\n1. On the next screen, check that the USB drive is open (if not, pick it from ☰ at the top left).\n2. Tap \"Use this folder\" at the bottom, then \"Allow\".\n\nThe drive\u2019s videos and photos then show inside DepthFlix. After that, USB opens the drive straight away, and tapping it again while you browse unmounts it.</string>
+    <string name="usb_first_msg">Allow DepthFlix to read the USB drive, just this once.\n\n1. On the next screen, check that the USB drive is open (if not, pick it from ☰ at the top left).\n2. Tap \"Use this folder\" at the bottom, then \"Allow\".\n\nThe drive\u2019s videos and photos then show inside DepthFlix. Tap USB while you browse to unmount it.</string>
     <string name="usb_first_go">Continue</string>
-    <string name="usb_entered">You are browsing the USB drive. When you are done, tap USB once more to unmount it.</string>
-    <string name="usb_crumb_release">tap USB again to unmount</string>
+    <string name="usb_entered">You are browsing the USB drive. When you are done, tap Eject USB to unmount it.</string>
+    <string name="usb_crumb_release">tap Eject USB to unmount</string>
     <string name="usb_again_release">Again: unmount</string>
     <string name="usb_released">The USB drive is ejected. You can unplug it now.</string>
     <string name="usb_release_in_files">In My Files, tap ⋮ at the top right, then Unmount, and come back. (Do not tap Format.)</string>

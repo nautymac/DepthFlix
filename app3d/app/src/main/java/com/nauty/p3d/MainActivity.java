@@ -114,22 +114,32 @@ public class MainActivity extends Activity {
         addButton(row, getString(R.string.open_url), new View.OnClickListener() {
             @Override public void onClick(View v) { chooseNetworkSource(); }
         });
-        // USB 드라이브. 한 번 고르면 다음부터 바로 열고, 길게 누르면 다시 고른다.
-        // USB 를 보는 중에 한 번 더 누르면 해제한다 (버튼 둘째 줄에 그렇게 적힌다).
+        // USB 드라이브 해제. 이 기기들에서는 USB 의 영상이 기기 목록에 이미 나오므로
+        // (미디어 색인이 USB 도 읽는다) 따로 둘러볼 필요가 없다 — 누르면 바로 해제 화면이다.
+        // 길게 누르면 USB 안을 DepthFlix 안에서 폴더째 둘러본다. 둘러보는 중에 다시 누르면
+        // 둘러보기를 끝내고 해제한다.
         Button usb = addButton(row, getString(R.string.usb), new View.OnClickListener() {
             @Override public void onClick(View v) {
-                if (!usbMode) {
-                    openUsb(false);
-                } else if (android.os.SystemClock.elapsedRealtime() - usbEnteredAt > USB_AGAIN_MS) {
-                    releaseUsb();
+                if (usbMode) {
+                    if (android.os.SystemClock.elapsedRealtime() - usbEnteredAt > USB_AGAIN_MS) {
+                        releaseUsb();
+                    }
+                    return;
+                }
+                String volume = UsbLibrary.mountedVolume(MainActivity.this);
+                if (volume == null) {
+                    toastLong(R.string.usb_not_attached);
+                    showUsbButton();
+                } else {
+                    openReleaseScreen(UsbLibrary.volumeTree(volume));
                 }
             }
         });
         usbButton = usb;
         usb.setOnLongClickListener(new View.OnLongClickListener() {
-            @Override public boolean onLongClick(View v) { openUsb(true); return true; }
+            @Override public boolean onLongClick(View v) { openUsb(usbMode); return true; }
         });
-        ((LinearLayout.LayoutParams) usb.getLayoutParams()).weight = 0.5f;
+        ((LinearLayout.LayoutParams) usb.getLayoutParams()).weight = 0.8f;
         root.addView(row);
 
         crumb = new TextView(this);
@@ -274,9 +284,33 @@ public class MainActivity extends Activity {
     /**
      * 돌아올 때마다 다시 읽는다. 다른 앱으로 영상을 받아온 직후에도 목록에 나와야 한다.
      */
+    /** USB 를 꽂거나 빼면 버튼 둘째 줄과 목록을 바로 고친다. */
+    private final android.content.BroadcastReceiver mediaWatch = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(android.content.Context c, Intent i) {
+            if (hasStoragePermission()) reload();
+            else showUsbButton();
+        }
+    };
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        try {
+            unregisterReceiver(mediaWatch);
+        } catch (Exception ignored) { }
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
+        android.content.IntentFilter media = new android.content.IntentFilter();
+        media.addAction(Intent.ACTION_MEDIA_MOUNTED);
+        media.addAction(Intent.ACTION_MEDIA_UNMOUNTED);
+        media.addAction(Intent.ACTION_MEDIA_EJECT);
+        media.addAction(Intent.ACTION_MEDIA_REMOVED);
+        media.addAction(Intent.ACTION_MEDIA_BAD_REMOVAL);
+        media.addDataScheme("file");
+        registerReceiver(mediaWatch, media);
         checkUsbReleased();
         if (!hasStoragePermission()) return;
         reload();
@@ -1207,20 +1241,11 @@ public class MainActivity extends Activity {
     private Uri usbReleasing;
 
     /** USB 를 보는 동안에는 버튼 둘째 줄에 "한 번 더: 해제"를 작게 적는다. */
+    /** 버튼 이름이 곧 하는 일(USB 안전제거)이다. 꽂힌 드라이브가 없으면 흐리게 둔다. */
     private void showUsbButton() {
         if (usbButton == null) return;
-        String name = getString(R.string.usb);
-        if (!usbMode || !UsbLibrary.removable(usbTree)) {
-            usbButton.setText(name);
-            return;
-        }
-        String hint = getString(R.string.usb_again_release);
-        android.text.SpannableString s = new android.text.SpannableString(name + "\n" + hint);
-        int from = name.length() + 1;
-        s.setSpan(new android.text.style.RelativeSizeSpan(0.72f), from, s.length(), 0);
-        s.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#FFB74D")),
-                from, s.length(), 0);
-        usbButton.setText(s);
+        boolean drive = usbMode || UsbLibrary.mountedVolume(this) != null;
+        usbButton.setAlpha(drive ? 1f : 0.45f);
     }
 
     /**
@@ -1237,7 +1262,7 @@ public class MainActivity extends Activity {
         if (!UsbLibrary.removable(tree)) return;
         new Thread(new Runnable() {
             @Override public void run() {
-                final boolean there = UsbLibrary.attached(MainActivity.this, tree);
+                final boolean there = UsbLibrary.isMounted(MainActivity.this, UsbLibrary.volumeOf(tree));
                 runOnUiThread(new Runnable() {
                     @Override public void run() {
                         if (isFinishing()) return;
@@ -1278,7 +1303,7 @@ public class MainActivity extends Activity {
         usbReleasing = null;
         new Thread(new Runnable() {
             @Override public void run() {
-                final boolean there = UsbLibrary.attached(MainActivity.this, tree);
+                final boolean there = UsbLibrary.isMounted(MainActivity.this, UsbLibrary.volumeOf(tree));
                 runOnUiThread(new Runnable() {
                     @Override public void run() {
                         if (!isFinishing()) {
