@@ -138,6 +138,12 @@ public class MainActivity extends Activity {
         crumb.setPadding(0, dp(8), 0, dp(4));
         root.addView(crumb);
 
+        // 이어보기: 마지막으로 본 것 한 줄 (Recents).
+        recentBox = new LinearLayout(this);
+        recentBox.setOrientation(LinearLayout.VERTICAL);
+        recentBox.setVisibility(View.GONE);
+        root.addView(recentBox);
+
         empty = new TextView(this);
         empty.setTextColor(Color.GRAY);
         empty.setGravity(Gravity.CENTER);
@@ -282,6 +288,7 @@ public class MainActivity extends Activity {
     private void reload() {
         boolean photo = (kind == MediaLibrary.Kind.IMAGE);
         showUsbButton();
+        showRecent(photo);
         if (usbMode) {
             // USB 에서는 이 버튼이 "기기 목록으로" 다.
             btnMode.setText(photo ? R.string.mode_photos : R.string.mode_videos);
@@ -334,7 +341,8 @@ public class MainActivity extends Activity {
             // 영상은 이름으로 3D 를 추측해 같이 보여준다. 사진은 그럴 필요가 없다 —
             // 원본 해상도를 정확히 읽을 수 있어서 뷰어가 열면서 바로 판별한다.
             SourceFormat f = photo ? null : SourceFormat.fromName(it.name);
-            display.add(f == null ? it.name : it.name + "   [" + f.label(this) + "]");
+            String line = f == null ? it.name : it.name + "   [" + f.label(this) + "]";
+            display.add(photo ? line : withProgress(line, Recents.fileKey(it.path), it.name));
         }
         crumb.setText(getString(R.string.crumb_in_folder,
                 MediaLibrary.shortPath(this, openFolder), items.size()));
@@ -1022,6 +1030,106 @@ public class MainActivity extends Activity {
 
     // ---- USB 해제 ----
     private Button usbButton;
+    // ---- 이어보기 ----
+    private LinearLayout recentBox;
+    private int recentSeq;
+
+    /** 영상 목록의 한 줄 뒤에 본 위치(또는 ✓)를 붙인다. */
+    private String withProgress(String line, String key, String name) {
+        String p = Recents.progress(this, key, name);
+        return p.isEmpty() ? line : line + "   " + p;
+    }
+
+    /**
+     * 목록 위의 이어보기 줄. 마지막으로 본 것 하나를 보이되, 그것이 뽑아 둔 USB 의 것이면
+     * 기기에서 마지막으로 보던 것도 함께 보인다.
+     */
+    private void showRecent(final boolean photo) {
+        final int seq = ++recentSeq;
+        final List<Recents.Entry> last = Recents.last(this, photo);
+        if (last.isEmpty()) {
+            recentBox.removeAllViews();
+            recentBox.setVisibility(View.GONE);
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override public void run() {
+                final List<Recents.Entry> rows = new ArrayList<>();
+                final List<Boolean> ready = new ArrayList<>();
+                for (Recents.Entry e : last) {
+                    boolean ok = !e.usb()
+                            || UsbLibrary.attached(MainActivity.this, Uri.parse(e.usbTree));
+                    if (!Recents.locate(MainActivity.this, e)) {
+                        Recents.forget(MainActivity.this, e.key);   // 지워진 파일
+                        continue;
+                    }
+                    rows.add(e);
+                    ready.add(ok);
+                    if (ok) break;
+                }
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (seq != recentSeq || isFinishing()) return;
+                        recentBox.removeAllViews();
+                        for (int i = 0; i < rows.size(); i++) addRecentRow(rows.get(i), ready.get(i));
+                        recentBox.setVisibility(rows.isEmpty() ? View.GONE : View.VISIBLE);
+                    }
+                });
+            }
+        }, "recent").start();
+    }
+
+    private void addRecentRow(final Recents.Entry e, final boolean ready) {
+        String where = e.photo ? e.note : Recents.progress(this, e.key, e.title);
+        StringBuilder s = new StringBuilder(getString(R.string.recent_row, e.title));
+        if (where != null && !where.isEmpty()) s.append("  ·  ").append(where.replace("▸ ", ""));
+        if (e.usb()) s.append("  ·  ").append(getString(ready ? R.string.usb : R.string.recent_usb_away));
+
+        TextView t = new TextView(this);
+        t.setText(s);
+        t.setTextSize(15f);
+        t.setTextColor(Color.parseColor(ready ? "#FFFFFF" : "#9E9E9E"));
+        t.setSingleLine(true);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+        t.setPadding(dp(14), dp(12), dp(14), dp(12));
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(Color.parseColor("#1F4E5A"));
+        bg.setCornerRadius(dp(6));
+        t.setBackground(bg);
+        t.setClickable(true);
+        t.setFocusable(true);
+        t.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (!ready) { toastLong(R.string.recent_plug_usb); return; }
+                startActivity(Recents.playerIntent(MainActivity.this, e));
+            }
+        });
+        t.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override public boolean onLongClick(View v) {
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle(e.title)
+                        .setItems(new String[]{getString(R.string.recent_remove),
+                                getString(R.string.recent_turn_off)}, (d, which) -> {
+                            if (which == 0) {
+                                Recents.forget(MainActivity.this, e.key);
+                            } else {
+                                Recents.setOn(MainActivity.this, false);
+                                toastLong(R.string.recent_off_hint);
+                            }
+                            showRecent(e.photo);
+                        })
+                        .setNegativeButton(R.string.action_cancel, null)
+                        .show();
+                return true;
+            }
+        });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(4);
+        lp.bottomMargin = dp(4);
+        recentBox.addView(t, lp);
+    }
+
     /** 이보다 빨리 다시 누른 것은 두 번 누르기로 보고 해제하지 않는다. */
     private static final long USB_AGAIN_MS = 800;
     private long usbEnteredAt;
@@ -1147,8 +1255,10 @@ public class MainActivity extends Activity {
                             } else {
                                 files++;
                                 SourceFormat f = e.photo ? null : SourceFormat.fromName(e.name);
-                                display.add((e.photo ? "🖼 " : "🎬 ") + e.name
-                                        + (f == null ? "" : "   [" + f.label(MainActivity.this) + "]"));
+                                String line = (e.photo ? "🖼 " : "🎬 ") + e.name
+                                        + (f == null ? "" : "   [" + f.label(MainActivity.this) + "]");
+                                display.add(e.photo ? line
+                                        : withProgress(line, Recents.usbKey(e.docId), e.name));
                             }
                         }
                         crumb.setText(getString(R.string.crumb_in_folder, crumbText, files));

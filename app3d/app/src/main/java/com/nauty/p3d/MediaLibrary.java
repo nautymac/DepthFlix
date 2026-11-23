@@ -41,9 +41,12 @@ public final class MediaLibrary {
         public final Uri uri;
         public final String name;
         public final String folder;      // 실제 부모 경로
+        public final String path;        // 실제 경로. 기기 파일이 아니면(USB) null
 
-        Item(Uri uri, String name, String folder) {
-            this.uri = uri; this.name = name; this.folder = folder;
+        Item(Uri uri, String name, String folder) { this(uri, name, folder, null); }
+
+        Item(Uri uri, String name, String folder, String path) {
+            this.uri = uri; this.name = name; this.folder = folder; this.path = path;
         }
     }
 
@@ -145,7 +148,7 @@ public final class MediaLibrary {
                     if (name == null) name = data == null
                             ? String.valueOf(id) : new File(data).getName();
                     out.add(new Item(
-                            Uri.withAppendedPath(content(kind), String.valueOf(id)), name, dir));
+                            Uri.withAppendedPath(content(kind), String.valueOf(id)), name, dir, data));
                 }
             }
         } catch (Exception ignored) {
@@ -167,11 +170,16 @@ public final class MediaLibrary {
 
     /** 이 파일이 든 폴더. 뷰어가 인텐트로 열렸을 때 목록을 되찾는 데 쓴다. */
     public static String folderOf(Context ctx, Uri uri) {
+        return parentOf(pathOf(ctx, uri));
+    }
+
+    /** 이 파일의 실제 경로. 모르면 null. */
+    public static String pathOf(Context ctx, Uri uri) {
         Cursor c = null;
         try {
             c = ctx.getContentResolver().query(
                     uri, new String[]{MediaStore.Images.Media.DATA}, null, null, null);
-            if (c != null && c.moveToFirst()) return parentOf(c.getString(0));
+            if (c != null && c.moveToFirst()) return c.getString(0);
         } catch (Exception ignored) {
         } finally {
             if (c != null) c.close();

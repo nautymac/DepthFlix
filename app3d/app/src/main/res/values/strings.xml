@@ -146,6 +146,14 @@
     <string name="usb">USB</string>
     <string name="usb_pick_hint">Choose the USB drive (or a folder on it) and tap “Use this folder”. Long-press USB to pick another one later.</string>
     <string name="usb_no_access">No access to the USB drive. Plug it in and pick it again.</string>
+    <string name="recent_row">▶ Continue: %s</string>
+    <string name="recent_usb_away">plug in the USB drive</string>
+    <string name="recent_plug_usb">Plug in the USB drive, then tap again.</string>
+    <string name="recent_remove">Remove this item</string>
+    <string name="recent_turn_off">Turn off the Continue row</string>
+    <string name="recent_off_hint">The Continue row is off. Turn it on again in ⚙ Settings while playing.</string>
+    <string name="recent_btn_on">Continue row on the list: on</string>
+    <string name="recent_btn_off">Continue row on the list: off</string>
     <string name="usb_root">USB</string>
     <string name="usb_again_release">Again: unmount</string>
     <string name="usb_released">The USB drive is ejected. You can unplug it now.</string>

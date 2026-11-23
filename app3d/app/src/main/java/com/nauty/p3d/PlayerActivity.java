@@ -81,7 +81,6 @@ public class PlayerActivity extends Activity
     private static final String KEY_SUB_SCALE = "sub_scale";
     private static final String KEY_SUB_Y     = "sub_y";
     private static final String KEY_SUB_DEPTH = "sub_depth";
-    private static final String KEY_POS       = "pos:";
     private static final String KEY_ASPECT    = "aspect:";
     private static final String KEY_CONV      = "conv:";
     /** 사진 뷰어의 좌우반전. 파일별이 아니라 전체 설정 — 한 번 바꾸면 다음에도 그대로다. */
@@ -290,6 +289,7 @@ public class PlayerActivity extends Activity
         String name = getIntent().getStringExtra(EXTRA_TITLE);
         if (name == null) name = pendingUri.getLastPathSegment();
         mediaKey = name == null ? "" : name;
+        itemKey = Recents.keyOf(this, pendingUri, getIntent().getStringExtra(EXTRA_USB_TREE));
 
         isPhoto = getIntent().getBooleanExtra(EXTRA_PHOTO, false) || looksLikePhoto(pendingUri);
 
@@ -392,6 +392,7 @@ public class PlayerActivity extends Activity
      * 판별도 프레임 한 장이면 끝난다. 확정한 뒤에 띄우면 화면이 한 번도 안 튄다.
      */
     private void beginPhoto() {
+        rememberRecent();
         SourceFormat saved = loadSavedFormat(mediaKey);
         if (saved != null) {
             manualChoice = true;
@@ -438,6 +439,7 @@ public class PlayerActivity extends Activity
         MediaLibrary.Item it = photos.get(photoIndex);
         pendingUri = it.uri;
         mediaKey   = it.name;
+        itemKey    = Recents.keyOf(this, pendingUri, getIntent().getStringExtra(EXTRA_USB_TREE));
 
         // 엔진을 먼저 놓는다. 배치가 바뀌면 패널이 출력면을 갈아끼우는데,
         // 그때 프레임이 들어오고 있으면 서피스를 두고 다투게 된다.
@@ -467,10 +469,29 @@ public class PlayerActivity extends Activity
 
     // ---------------------------------------------------------- 이어보기
 
+    /** 지금 파일의 열쇠 (Recents). 기기 파일도 USB 도 아니면 null. */
+    private String itemKey;
+
     /** 이 파일을 마지막으로 본 지점. 없으면 0. */
     private long loadResumeMs() {
-        if (mediaKey == null || mediaKey.isEmpty()) return 0;
-        return getSharedPreferences(PREFS, MODE_PRIVATE).getLong(KEY_POS + mediaKey, 0);
+        return Recents.position(this, itemKey, mediaKey);
+    }
+
+    /** 목록 화면의 이어보기 줄에 나올 "마지막으로 본 것"으로 적는다. */
+    private void rememberRecent() {
+        if (itemKey == null) return;
+        Recents.Entry e = new Recents.Entry();
+        e.key = itemKey;
+        e.uri = pendingUri;
+        e.title = mediaKey;
+        e.photo = isPhoto;
+        e.usbTree = getIntent().getStringExtra(EXTRA_USB_TREE);
+        e.usbDoc = getIntent().getStringExtra(EXTRA_USB_DOC);
+        if (e.usbTree == null) e.folder = MediaLibrary.folderOf(this, pendingUri);
+        if (isPhoto && photos != null && photoIndex >= 0) {
+            e.note = (photoIndex + 1) + " / " + photos.size();
+        }
+        Recents.remember(this, e);
     }
 
     /**
@@ -486,15 +507,14 @@ public class PlayerActivity extends Activity
     }
 
     private void writePosition(long pos, long dur) {
-        if (mediaKey == null || mediaKey.isEmpty() || dur <= 0) return;
-        android.content.SharedPreferences.Editor e =
-                getSharedPreferences(PREFS, MODE_PRIVATE).edit();
-        if (pos < MIN_SAVE_MS || pos >= dur - END_MARGIN_MS) {
-            e.remove(KEY_POS + mediaKey);      // 초반이거나 다 봤으면 기억할 것이 없다
-        } else {
-            e.putLong(KEY_POS + mediaKey, pos);
-        }
-        e.apply();
+        if (isPhoto || dur <= 0) return;
+        // 이어 볼 자리로 아직 옮기기 전이다. 지금 위치(맨 앞)를 적으면 그 자리를 잃는다.
+        if (pendingResumeMs > 0) return;
+        boolean started = pos >= MIN_SAVE_MS;
+        boolean finished = started && pos >= dur - END_MARGIN_MS;
+        Recents.savePosition(this, itemKey, mediaKey, pos, dur, started, finished);
+        if (finished) Recents.forget(this, itemKey);      // 이어 볼 것이 없다
+        else if (started) rememberRecent();
     }
 
     /** 앱을 벗어나거나 닫을 때는 즉시 기록한다. */
@@ -799,12 +819,25 @@ public class PlayerActivity extends Activity
         // 엔진 선택 버튼은 없다. 영상은 ExoPlayer 하나뿐이다 (VideoEngine 주석 참고).
 
         p.addView(header(getString(R.string.hdr_file)));
+        // 목록 화면의 이어보기 줄. 무엇을 봤는지 첫 화면에 보이는 것이 싫으면 끈다.
+        final Button[] recent = new Button[1];
+        recent[0] = panelButton(p, recentLabel(), new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                Recents.setOn(PlayerActivity.this, !Recents.isOn(PlayerActivity.this));
+                if (Recents.isOn(PlayerActivity.this) && isPhoto) rememberRecent();
+                recent[0].setText(recentLabel());
+            }
+        });
         panelButton(p, getString(R.string.btn_delete_file), new View.OnClickListener() {
             @Override public void onClick(View v) { confirmDeleteCurrentFile(); }
         });
 
         scroll.addView(p);
         return scroll;
+    }
+
+    private String recentLabel() {
+        return getString(Recents.isOn(this) ? R.string.recent_btn_on : R.string.recent_btn_off);
     }
 
     private interface OnValue { void set(int v); }
@@ -930,6 +963,7 @@ public class PlayerActivity extends Activity
 
     /** 지워진 뒤: 사진은 다음 장으로, 영상은 목록으로. */
     private void afterDelete(Uri uri) {
+        Recents.forget(this, itemKey);
         if (isPhoto) {
             if (photos != null) {
                 int idx = MediaLibrary.indexOf(photos, uri);
