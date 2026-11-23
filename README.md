@@ -1,214 +1,442 @@
 # DepthFlix — Leia 라이트필드 패널용 3D 영상·사진 뷰어
 
+
+
 *한국어 · [English](README.en.md)*
 
+
+
 [Leia Lume Pad 2](https://www.leiainc.com/)(LPD-20W)와 **RedMagic Tablet 3D
+
 Explorer Edition**(NP02J, 코드네임 K68) — 8방향 회절 라이트필드 + 얼굴추적을 쓰는
+
 두 기기에서 **3D 영상과 3D 사진을 제대로 보기 위해** 만든 뷰어다. 기기별로 빌드
+
 플레이버가 나뉘어 있다(`lumepad`, `redmagic`) — CNSDK 코어 버전이 달라(Lume Pad
+
 0.6.200, RedMagic 0.10.x) 연결부를 따로 준비해야 한다.
+
+
 
 기기에 들어 있는 LeiaPlayer 로도 볼 수는 있지만, 이쪽은 다음이 다르다.
 
+
+
 - **SBS/TB 배치를 픽셀과 해상도로 직접 판별한다** — 파일 이름을 믿지 않는다
+
 - **수렴을 실제로 재서 맞춘다** — 게임에서 뽑은 SBS 는 만든 화면 기준으로 좌우가
+
   통째로 어긋나 있어서, 태블릿에 그대로 올리면 두 눈이 모으지 못한다
+
 - **자막을 좌·우 뷰에 각각 그린다** — 화면 위에 2D 로 얹으면 위빙을 거치며 겹쳐 보인다
+
 - **2D 영상은 Leia 자신의 신경망 변환기로 3D 화한다** — 기기 안에 이미 있는 것을 쓴다
+
 - **DTS·AC3 를 소리 나게 재생한다** (FFmpeg 오디오 확장)
 
+
+
 ---
+
+
 
 ## 설치
 
+
+
 [Releases](../../releases) 에서 기기에 맞는 APK 를 받아 설치하면 된다.
+
 **그 밖에 할 일이 없다** — adb 설정도, 루팅도 필요 없다.
 
+
+
 | APK | 기기 | 패키지 |
+
 |---|---|---|
+
 | `DepthFlix-LumePad2-*.apk` | Lume Pad 2 (LPD-20W) | `com.nauty.p3d` |
+
 | `DepthFlix-RedMagic-*.apk` | RedMagic Tablet 3D Explorer Edition (NP02J) | `com.nauty.p3d.redmagic` |
+
+
 
 패키지가 달라 한 기기에 둘 다 설치돼 있어도 문제없다(테스트 편의용).
 
+
+
 | 필요한 것 | |
+
 |---|---|
+
 | 권한 | 저장소 읽기 하나. 처음 실행할 때 앱이 물어본다 |
+
 | 얼굴추적 | 기기의 Leia 서비스가 한다. 이 앱은 카메라 권한 없이 동작한다 |
+
 | 재생 중 밝기 강제 | Lume Pad 2는 켬(3D 모드가 어두워지는 문제 때문), RedMagic은 끔(적응형 밝기로 충분함이 실기로 확인됨) — `R.bool.force_max_brightness`로 기기별 값 |
 
+
+
 ---
+
+
 
 ## 쓰는 법
 
+
+
 ### 목록
+
+
 
 앱을 열면 **영상 폴더** 목록이 나온다. 폴더를 누르면 그 안의 파일이 보인다.
 
+
+
 | 조작 | |
+
 |---|---|
+
 | **사진 보기 / 영상 보기** | 목록을 사진과 영상 사이에서 바꾼다 |
+
 | 폴더를 **길게 누르기** | 그 폴더를 목록 맨 위에 고정한다 (★). 다시 누르면 해제 |
+
 | **뒤로** | 파일 목록 → 폴더 목록 |
+
 | **URL/스트리밍 열기** | `http(s)` / `m3u8` / `mpd` / `rtsp` 주소를 직접 연다 |
 
+| **USB** | USB 드라이브를 둘러본다. 처음 한 번 드라이브를 허락하면 다음부터 바로 열린다. 길게 누르면 다른 드라이브를 고른다 |
+
+| USB를 보는 중에 **USB 한 번 더** | 드라이브 해제(마운트 해제·꺼내기) 화면을 연다. 버튼 둘째 줄에 작게 "한 번 더: 해제"가 보인다. 해제하고 돌아오면 정말 해제됐는지 확인해 알려 준다 |
+
+| **▶ 이어보기** 줄 | 목록 맨 위의 마지막으로 본 영상(사진 보기에서는 사진). 누르면 보던 자리에서 이어지고, 보고 나오면 그 파일이 있던 폴더로 간다. 길게 눌러 지우거나 끈다 |
+
+
+
+영상 목록에는 어디까지 봤는지(`▸ 42:10 / 1:58:00`, 다 봤으면 `✓`)가 붙는다. 유튜브·네트워크 재생은 이어보기에 나오지 않는다.
+
+
+
+앱은 USB를 직접 해제할 수 없어서(안드로이드가 시스템 앱에만 허락한다) 해제할 수 있는 시스템 화면으로 바로 데려다 준다. 삼성 폰은 내 파일의 그 USB 화면(⋮ › 마운트 해제), 그 밖의 기기는 설정의 그 드라이브 화면(꺼내기)이다. **Lume Pad 2와 RedMagic에서 어느 화면이 열리는지는 아직 확인하지 못했다.**
+
+
+
 영상 이름 옆의 `[좌우 SBS (full)]` 같은 표시는 **이름에서 추측한** 배치다.
+
 실제 배치는 열면서 픽셀로 다시 판별한다.
+
+
 
 ### 재생 화면
 
+
+
 화면을 한 번 누르면 아래 재생바가 나타나고 사라진다.
 
+
+
 | 버튼 | 영상 | 사진 |
+
 |---|---|---|
+
 | ◀◀ ▶▶ | 짧게 30초, 길게 5분 이동 | 이전/다음 장, 길게 10장 |
+
 | 화면을 좌우로 밀기 | — | 왼쪽으로 밀면 다음 장, 오른쪽으로 밀면 이전 장. 파일 이름 알림은 뜨지 않는다 |
+
 | ❚❚ | 재생/일시정지 | — |
+
 | 시간 표시 | 위치 / 길이 | 몇 번째 / 전체 |
+
 | ⚙ 설정 | 오른쪽 설정판 | 같음 |
+
+
 
 사진은 **지금 들어간 폴더 안에서만** 넘어간다.
 
+
+
 ### 설정판
+
+
 
 **3D**
 
+
+
 | | |
+
 |---|---|
+
 | **소스** | 배치를 직접 고른다 (2D / 좌우 half·full / 상하 half·full). 고르면 그 파일에 기억된다 |
+
 | **출력** | 3D · 2D · SBS 확인 |
+
 | **좌우반전** | 깊이가 반대로 보일 때 |
+
 | **↺ 자동 판별로 되돌리기** | 잘못 고른 것을 지우고 다시 판별한다 |
+
 | **화면 비** | 자동 · 16:9 · 2.40:1 · 1.85:1 · 4:3 · 꽉 채우기 |
+
 | **화면 비 미세조정** | 1.00 ~ 3.00. 임의 비율로 눌러 담은 파일용 |
+
 | **깊이** | 2D→3D 변환의 시차 강도 |
+
 | **수렴 보정** | 아래 설명 |
+
+
 
 **자막**
 
+
+
 자막 파일(`.srt` / `.smi`)이 영상 옆에 있으면 자동으로 읽는다. 없으면
+
 **자막 선택** 으로 영상 폴더 · `Movies` · `Download` · `Subtitles` 를 뒤져 고른다.
+
 크기 · 위치 · 깊이(앞으로 튀어나오는 정도)를 조절할 수 있고, 값은 기억된다.
 
+
+
 ---
+
+
 
 ## 수렴 보정 — 이 앱을 만든 이유의 절반
 
+
+
 게임에서 뽑은 SBS 스크린샷·영상은 **만들 때 쓰던 모니터와 그때의 convergence
+
 설정이 픽셀 수로 굳어** 있다. 같은 그림을 태블릿 눈 상자에 맞춰 늘리거나 줄이면
+
 시차도 같은 비율로 변한다.
 
+
+
 기기의 HelixMod 스크린샷 36장을 재봤더니 좌우 절반이 **통째로** 어긋나 있었다 —
+
 1920px 눈 기준으로 20px 부터 224px(눈 폭의 11.7%)까지. 정작 장면 자체의 깊이 폭은
+
 28~184px 로 그보다 훨씬 작다. 24인치 모니터에서 만든 값을 10인치 태블릿에 그대로
+
 올리니 두 눈이 모을 수 있는 한계를 넘는 것이다.
 
+
+
 - **수렴 보정** 슬라이더 — 화면에 나가는 시차를 픽셀 단위로 밀고 당긴다.
+
   양수면 장면이 화면 뒤로, 음수면 앞으로 온다. 파일마다 기억된다.
+
 - **수렴 자동 (장면 중심을 화면에)** — 지금 그림의 시차를 실제로 재서
+
   장면의 중심을 화면 평면에 놓는다. 깊이 폭의 절반은 앞, 절반은 뒤로 갈려서
+
   두 눈이 모으기 편한 범위에 들어온다. 측정한 시차 범위는 설정판에 같이 표시된다.
+
+
 
 눈금이 **화면 픽셀**이라 소스 해상도가 3344 든 5120 이든 같은 값이 같은 뜻이다.
 
+
+
 ---
+
+
 
 ## 어떻게 동작하나
 
+
+
 ```
+
 영상/사진 ─▶ 디코더 ─▶ OES 텍스처 ─▶ 우리 GL
+
                                        │  레터박스 · 화면비 · SBS/TB 크롭
+
                                        │  수렴 보정 · 자막(좌우 각각)
+
                                        ▼
+
                        2D 소스 ──▶ Leia 신경망 변환기 ──┐
+
                        3D 소스 ──▶ SBS 프레임 ─────────┴─▶ CNSDK 위빙 ─▶ 화면
+
 ```
+
+
 
 마지막 단계(위빙)는 우리가 하지 않는다. 이 패널은 8방향 회절이고 얼굴 위치에 따라
+
 매 프레임 짜임이 달라져서, 고정 패턴으로는 3D 가 서지 않기 때문이다. CNSDK 에 넘긴다.
 
+
+
 **2D→3D 는 Leia 자신의 신경망 변환기를 쓴다.** 기기의 시스템 앱
+
 (`com.leiainc.media.service`) 이 모델과 SNPE·Hexagon 실행기를 들고 있어서, 그것을
+
 우리 프로세스로 불러들여 쓴다. 우리가 재배포하는 Leia 바이너리는 없다.
+
 같은 프레임으로 진짜 스테레오와 비교해 봤을 때 우리가 쓰던 시어 방식보다 확실히 낫다.
 
+
+
 자세한 기록은 [`LUMEPAD2-PORT.md`](LUMEPAD2-PORT.md) 에 있다 — 잘못 짚었던
+
 진단까지 그대로 남겨뒀다.
 
+
+
 **다른 앱에 3D 를 붙이려면** [`MOONLIGHT-LUMEPAD2.md`](MOONLIGHT-LUMEPAD2.md) 를 보라.
+
 Moonlight 을 예로 들어, CNSDK 를 앱에 넣는 법과 실기에서 물린 함정 넷을 정리했다.
+
 이 패널은 고정 패턴이 아니라서 밖에서 남의 화면을 3D 로 바꿔줄 방법이 없다 —
+
 그리는 앱 자신이 위빙을 해야 한다.
 
+
+
 ---
+
+
 
 ## 직접 빌드하려면
 
+
+
 CNSDK 는 Leia 의 것이라 재배포할 수 없어서 **저장소에 들어 있지 않다.**
+
 본인 기기에서 꺼내야 하고, 두 기기의 CNSDK 코어 버전이 달라 연결부도 따로
+
 준비해야 한다.
 
+
+
 ```
+
 app3d/app/libs/lumepad/leia-cnsdk.jar                          (Lume Pad 2, CNSDK 0.6.200)
+
 app3d/app/src/lumepad/jniLibs/arm64-v8a/libleiaSDK.so
+
 app3d/app/src/lumepad/jniLibs/arm64-v8a/libleiaspdlog.so
+
 app3d/app/src/lumepad/assets/cnsdk.version
 
+
+
 app3d/app/libs/redmagic/leia-cnsdk.jar                         (RedMagic, CNSDK 0.10.x)
+
 app3d/app/src/redmagic/jniLibs/arm64-v8a/libleiaSDK-jni.so
+
 app3d/app/src/redmagic/jniLibs/arm64-v8a/libleiaCore-loader.so
+
 app3d/app/src/redmagic/assets/cnsdk.version
+
 ```
 
+
+
 Lume Pad 2 쪽은 기기에 설치된 CNSDK 사용 앱(예: 정식 Moonlight3D)의 APK에서
+
 `lib/arm64-v8a/libleiaSDK.so`·`libleiaspdlog.so`와 `assets/cnsdk.version`을
+
 꺼내고, `classes*.dex`를 jar로 만든다(dex2jar 등). RedMagic 쪽은 기기 자체의
+
 Leia 시스템 앱에서 같은 방식으로 꺼낸다 — 두 연결부는 서로 바꿔 쓸 수 없다
+
 (`LeiaSDK.Delegate`가 인터페이스에서 추상 클래스로 바뀌는 등 API 자체가 다르다).
+
+
 
 그 다음 평소대로 빌드한다.
 
+
+
 ```bash
+
 cd app3d
+
 ./gradlew assembleLumepadDebug     # 또는 assembleRedmagicDebug, assembleLumepadRelease 등
+
 adb install -r app/build/outputs/apk/lumepad/debug/app-lumepad-debug.apk
+
 ```
+
+
 
 서명해서 배포하려면 `app3d/keystore.properties` 를 만든다 (저장소에 넣지 않는다).
 
+
+
 ```properties
+
 storeFile=/절대/경로/your.jks
+
 storePassword=...
+
 keyAlias=...
+
 keyPassword=...
+
 ```
 
+
+
 FFmpeg 오디오 확장(AC3/E-AC3/DTS/TrueHD)은 [`app3d/ffmpeg/README.md`](app3d/ffmpeg/README.md)
+
 의 스크립트로 만든다. 없어도 빌드는 되지만 그 코덱들이 무음이 된다.
 
+
+
 ---
+
+
 
 ## 저장소에 없는 것
 
+
+
 | | 왜 |
+
 |---|---|
+
 | `app3d/app/libs/lumepad/leia-cnsdk.jar`, `app3d/app/libs/redmagic/leia-cnsdk.jar` | Leia 의 저작물. 기기에서 꺼내 쓸 것 |
+
 | `app3d/app/src/main/jniLibs/` | 같음 (`libleiaSDK.so`, `libleiaspdlog.so`) |
+
 | `app3d/app/src/main/assets/shaders/`, `cnsdk.version` | 같음 |
+
 | `app3d/ffmpeg/src/main/jni/ffmpeg/` | 빌드 스크립트로 재생성 |
+
 | 서명 키 | 당연히 |
+
+
 
 ---
 
+
+
 ## 라이선스
+
+
 
 [MIT](LICENSE) — 이 저장소에 담긴 우리 코드에 한한다.
 
+
+
 이 앱은 다음을 함께 쓴다. 각자의 조건을 따른다.
 
+
+
 | | |
+
 |---|---|
+
 | [AndroidX Media3 (ExoPlayer)](https://github.com/androidx/media) | Apache-2.0 |
+
 | [libVLC for Android](https://code.videolan.org/videolan/vlc-android) | LGPL-2.1+ |
+
 | [FFmpeg](https://ffmpeg.org/) | LGPL-2.1+ (기본 설정 기준) |
+
 | Leia CNSDK / LeiaMediaSDK | Leia Inc. 사유. **저장소에 없다** — 각자 기기에서 꺼내 쓸 것 |
+
