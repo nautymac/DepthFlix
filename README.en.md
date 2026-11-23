@@ -54,6 +54,9 @@ The app opens on a list of **video folders**. Tap one to see its files.
 | **Long-press** a folder | Pins it to the top of the list (★). Long-press again to unpin |
 | **Back** | File list → folder list |
 | **Open URL / stream** | Opens an `http(s)` / `m3u8` / `mpd` / `rtsp` address directly |
+| **Eject USB** | Opens the system screen that ejects (unmounts) the plugged-in USB drive. Come back, and DepthFlix checks that it is really released. Dimmed when no drive is in. The drive's folders, videos and photos already show in the normal Videos and Photos lists |
+| **Long-press Eject USB** | Browses only the USB drive, folder by folder (allow the drive once the first time). Tap Eject USB while browsing to stop and open the eject screen |
+| **▶ Continue** row | The last video (or photo, in Photos) at the top of the list. Tap it to go on from where you were; when you come back you land in that file's folder. Long-press to remove it or turn it off. Video lists show how far you got (`▸ 42:10 / 1:58:00`, or `✓` when finished) |
 
 A tag such as `Side-by-side (full)` next to a video name is a **guess from the
 filename**. The real layout is worked out from pixels when the file opens.
