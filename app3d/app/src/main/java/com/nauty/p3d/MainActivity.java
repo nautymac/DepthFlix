@@ -347,6 +347,11 @@ public class MainActivity extends Activity {
         crumb.setText(getString(R.string.crumb_in_folder,
                 MediaLibrary.shortPath(this, openFolder), items.size()));
         show(display, getString(R.string.empty_folder));
+        if (focusRecent != null) {
+            List<String> keys = new ArrayList<>();
+            for (MediaLibrary.Item it : items) keys.add(Recents.fileKey(it.path));
+            focusOn(keys);
+        }
     }
 
     /**
@@ -1079,6 +1084,53 @@ public class MainActivity extends Activity {
         }, "recent").start();
     }
 
+    /** 다음에 목록을 그릴 때 이 파일(또는 그사이 마지막으로 본 파일) 자리로 간다. */
+    private Recents.Entry focusRecent;
+
+    /**
+     * 이어보기로 열기 전에 목록을 그 파일이 든 폴더로 옮겨 둔다. 보고 돌아오면 그 폴더다.
+     * 목록은 돌아왔을 때(onResume) 다시 그려진다.
+     */
+    private void goToFolderOf(Recents.Entry e) {
+        focusRecent = e;
+        kind = e.photo ? MediaLibrary.Kind.IMAGE : MediaLibrary.Kind.VIDEO;
+        if (!e.usb()) {
+            usbMode = false;
+            openFolder = e.folder;
+            return;
+        }
+        usbMode = true;
+        openFolder = null;
+        usbEnteredAt = android.os.SystemClock.elapsedRealtime();
+        usbTree = Uri.parse(e.usbTree);
+        // 고른 폴더(뿌리)부터 그 파일의 폴더까지. 이 제공자의 문서 ID 는 "볼륨:경로"다.
+        String root = UsbLibrary.rootDocId(usbTree);
+        usbPath.clear();
+        usbPath.add(new String[]{root, getString(R.string.usb_root)});
+        if (e.usbDoc == null || !e.usbDoc.startsWith(root)) return;
+        String rest = e.usbDoc.substring(root.length());
+        String at = root;
+        for (String name : rest.split("/")) {
+            if (name.isEmpty()) continue;
+            at = at.endsWith(":") ? at + name : at + "/" + name;
+            usbPath.add(new String[]{at, name});
+        }
+    }
+
+    /** 이어보기에서 돌아온 폴더에서 보던 파일이 보이게 한다. keys 는 목록의 줄 순서. */
+    private void focusOn(List<String> keys) {
+        Recents.Entry e = focusRecent;
+        if (e == null) return;
+        focusRecent = null;
+        // 사진은 넘겨 보다 다른 장에서 돌아올 수 있다: 마지막으로 본 장을 먼저 찾는다.
+        for (Recents.Entry l : Recents.last(this, e.photo)) {
+            int at = l.usb() == e.usb() ? keys.indexOf(l.key) : -1;
+            if (at >= 0) { list.setSelection(at); return; }
+        }
+        int at = keys.indexOf(e.key);          // 다 봐서 기록이 없어진 영상
+        if (at >= 0) list.setSelection(at);
+    }
+
     private void addRecentRow(final Recents.Entry e, final boolean ready) {
         String where = e.photo ? e.note : Recents.progress(this, e.key, e.title);
         StringBuilder s = new StringBuilder(getString(R.string.recent_row, e.title));
@@ -1101,6 +1153,7 @@ public class MainActivity extends Activity {
         t.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (!ready) { toastLong(R.string.recent_plug_usb); return; }
+                goToFolderOf(e);
                 startActivity(Recents.playerIntent(MainActivity.this, e));
             }
         });
@@ -1268,6 +1321,11 @@ public class MainActivity extends Activity {
                         // 폴더면 보던 자리 그대로 (show 의 sameView 는 USB 폴더를 모른다).
                         if (!here[0].equals(usbShownDoc)) list.setSelection(0);
                         usbShownDoc = here[0];
+                        if (focusRecent != null) {
+                            List<String> keys = new ArrayList<>();
+                            for (UsbLibrary.Entry e : entries) keys.add(Recents.usbKey(e.docId));
+                            focusOn(keys);
+                        }
                     }
                 });
             }
