@@ -158,7 +158,7 @@
     <string name="usb_again_release">Again: unmount</string>
     <string name="usb_released">The USB drive is ejected. You can unplug it now.</string>
     <string name="usb_release_in_files">In My Files, tap ⋮ at the top right, then Unmount, and come back. (Do not tap Format.)</string>
-    <string name="usb_release_in_settings">Apps cannot eject it themselves, so the storage screen opens. Tap Unmount for the USB drive, then come back.</string>
+    <string name="usb_release_in_settings">Apps cannot eject it themselves, so the settings screen opens. Tap Eject (or Unmount) for the USB drive, then come back.</string>
     <string name="usb_still_attached">The USB drive is still mounted. Unmount it before unplugging.</string>
     <string name="usb_not_attached">No USB drive is connected.</string>
     <string name="usb_empty">No videos or photos here.</string>

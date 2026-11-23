@@ -156,7 +156,7 @@
     <string name="usb_again_release">한 번 더: 해제</string>
     <string name="usb_released">USB가 해제됐습니다. 이제 뽑아도 됩니다.</string>
     <string name="usb_release_in_files">내 파일이 열리면 오른쪽 위 ⋮ › ‘마운트 해제’를 누르고 돌아오세요. (‘포맷’은 누르지 마세요)</string>
-    <string name="usb_release_in_settings">앱이 직접 해제할 수 없어 저장공간 화면을 엽니다. USB의 ‘마운트 해제’를 누른 뒤 돌아오세요.</string>
+    <string name="usb_release_in_settings">앱이 직접 해제할 수 없어 설정 화면을 엽니다. USB의 ‘꺼내기’(또는 ‘마운트 해제’)를 누른 뒤 돌아오세요.</string>
     <string name="usb_still_attached">USB가 아직 연결되어 있습니다. 해제한 뒤에 뽑아 주세요.</string>
     <string name="usb_not_attached">연결된 USB가 없습니다.</string>
     <string name="usb_empty">여기에는 영상이나 사진이 없습니다.</string>

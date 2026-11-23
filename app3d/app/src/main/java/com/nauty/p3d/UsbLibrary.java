@@ -140,6 +140,20 @@ public final class UsbLibrary {
         return i.resolveActivity(ctx.getPackageManager()) == null ? null : i;
     }
 
+    /**
+     * 내 파일이 없는 폰(Lume Pad, RedMagic 등)에서: 안드로이드 설정의 이 드라이브 화면.
+     * 기본 설정 앱은 드라이브(문서 뿌리)마다 화면이 있고 거기에 꺼내기가 있다.
+     *
+     * @return 받아 줄 화면이 없으면 null
+     */
+    public static Intent rootSettingsIntent(Context ctx, Uri tree) {
+        String volume = volumeOf(tree);
+        if (volume == null) return null;
+        Intent i = new Intent("android.provider.action.DOCUMENT_ROOT_SETTINGS");
+        i.setDataAndType(DocumentsContract.buildRootUri(EXTERNAL, volume), "vnd.android.document/root");
+        return i.resolveActivity(ctx.getPackageManager()) == null ? null : i;
+    }
+
     public static String rootDocId(Uri tree) {
         return DocumentsContract.getTreeDocumentId(tree);
     }

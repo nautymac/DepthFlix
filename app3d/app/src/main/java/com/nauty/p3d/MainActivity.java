@@ -1242,9 +1242,15 @@ public class MainActivity extends Activity {
                 return;
             } catch (Exception ignored) { }
         }
-        try {
-            startActivity(new Intent(android.provider.Settings.ACTION_INTERNAL_STORAGE_SETTINGS));
-        } catch (Exception ignored) { }
+        Intent root = UsbLibrary.rootSettingsIntent(this, tree);
+        for (Intent i : new Intent[]{root,
+                new Intent(android.provider.Settings.ACTION_INTERNAL_STORAGE_SETTINGS)}) {
+            if (i == null) continue;
+            try {
+                startActivity(i);
+                break;
+            } catch (Exception ignored) { }
+        }
         toastLong(R.string.usb_release_in_settings);
     }
 
