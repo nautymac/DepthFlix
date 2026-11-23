@@ -91,6 +91,60 @@ public final class UsbLibrary {
         return i;
     }
 
+    /** 시스템의 외장 저장소 제공자. USB 드라이브의 폴더는 여기서 온다. */
+    private static final String EXTERNAL = "com.android.externalstorage.documents";
+
+    /** 이 트리가 있는 볼륨("1234-ABCD"). 내장 저장소나 다른 제공자면 null — 해제할 것이 없다. */
+    private static String volumeOf(Uri tree) {
+        if (tree == null || !EXTERNAL.equals(tree.getAuthority())) return null;
+        String id = rootDocId(tree);
+        int colon = id.indexOf(':');
+        String root = colon < 0 ? id : id.substring(0, colon);
+        return root.isEmpty() || "primary".equals(root) || "home".equals(root) ? null : root;
+    }
+
+    /** 해제할 수 있는 종류(뺄 수 있는 드라이브)인가. */
+    public static boolean removable(Uri tree) {
+        return volumeOf(tree) != null;
+    }
+
+    /** 드라이브가 지금 붙어 있어 읽히는가. UI 스레드에서 부르지 말 것. */
+    public static boolean attached(Context ctx, Uri tree) {
+        Cursor c = null;
+        try {
+            c = ctx.getContentResolver().query(
+                    DocumentsContract.buildDocumentUriUsingTree(tree, rootDocId(tree)),
+                    new String[]{DocumentsContract.Document.COLUMN_DOCUMENT_ID}, null, null, null);
+            return c != null && c.moveToFirst();
+        } catch (Exception e) {
+            return false;   // 해제됐거나 뽑혔다
+        } finally {
+            if (c != null) c.close();
+        }
+    }
+
+    /**
+     * 드라이브를 해제해 달라고 시스템에 부탁한다. UI 스레드에서 부르지 말 것.
+     *
+     * 볼륨을 직접 해제하는 권한(MOUNT_UNMOUNT_FILESYSTEMS)은 시스템 앱에만 있고, 공개된
+     * 길인 ejectRoot 도 사용자가 허락한 폴더 권한만으로는 거절되는 것이 보통이다. 그래서
+     * 결과를 믿지 않고 {@link #attached} 로 다시 본다.
+     *
+     * @return 정말로 해제됐는가
+     */
+    public static boolean eject(Context ctx, Uri tree) {
+        String volume = volumeOf(tree);
+        if (volume == null || Build.VERSION.SDK_INT < 26) return false;
+        try {
+            DocumentsContract.ejectRoot(ctx.getContentResolver(),
+                    DocumentsContract.buildRootUri(EXTERNAL, volume));
+        } catch (Exception e) {
+            android.util.Log.i("P3D", "USB 해제 거절: " + e);
+            return false;
+        }
+        return !attached(ctx, tree);
+    }
+
     public static String rootDocId(Uri tree) {
         return DocumentsContract.getTreeDocumentId(tree);
     }

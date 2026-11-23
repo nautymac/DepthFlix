@@ -115,9 +115,17 @@ public class MainActivity extends Activity {
             @Override public void onClick(View v) { chooseNetworkSource(); }
         });
         // USB 드라이브. 한 번 고르면 다음부터 바로 열고, 길게 누르면 다시 고른다.
+        // USB 를 보는 중에 한 번 더 누르면 해제한다 (버튼 둘째 줄에 그렇게 적힌다).
         Button usb = addButton(row, getString(R.string.usb), new View.OnClickListener() {
-            @Override public void onClick(View v) { openUsb(false); }
+            @Override public void onClick(View v) {
+                if (!usbMode) {
+                    openUsb(false);
+                } else if (android.os.SystemClock.elapsedRealtime() - usbEnteredAt > USB_AGAIN_MS) {
+                    releaseUsb();
+                }
+            }
         });
+        usbButton = usb;
         usb.setOnLongClickListener(new View.OnLongClickListener() {
             @Override public boolean onLongClick(View v) { openUsb(true); return true; }
         });
@@ -263,6 +271,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        checkUsbReleased();
         if (!hasStoragePermission()) return;
         reload();
         // 스코프드 스토리지(play)에서는 저장소를 직접 훑을 수 없다 — MediaStore 가 색인한
@@ -272,6 +281,7 @@ public class MainActivity extends Activity {
 
     private void reload() {
         boolean photo = (kind == MediaLibrary.Kind.IMAGE);
+        showUsbButton();
         if (usbMode) {
             // USB 에서는 이 버튼이 "기기 목록으로" 다.
             btnMode.setText(photo ? R.string.mode_photos : R.string.mode_videos);
@@ -1006,7 +1016,97 @@ public class MainActivity extends Activity {
         usbPath.clear();
         usbPath.add(new String[]{UsbLibrary.rootDocId(tree), getString(R.string.usb_root)});
         usbMode = true;
+        usbEnteredAt = android.os.SystemClock.elapsedRealtime();
         reload();
+    }
+
+    // ---- USB 해제 ----
+    private Button usbButton;
+    /** 이보다 빨리 다시 누른 것은 두 번 누르기로 보고 해제하지 않는다. */
+    private static final long USB_AGAIN_MS = 800;
+    private long usbEnteredAt;
+    /** 시스템 화면에서 해제하고 돌아오기를 기다리는 드라이브. */
+    private Uri usbReleasing;
+
+    /** USB 를 보는 동안에는 버튼 둘째 줄에 "한 번 더: 해제"를 작게 적는다. */
+    private void showUsbButton() {
+        if (usbButton == null) return;
+        String name = getString(R.string.usb);
+        if (!usbMode || !UsbLibrary.removable(usbTree)) {
+            usbButton.setText(name);
+            return;
+        }
+        String hint = getString(R.string.usb_again_release);
+        android.text.SpannableString s = new android.text.SpannableString(name + "\n" + hint);
+        int from = name.length() + 1;
+        s.setSpan(new android.text.style.RelativeSizeSpan(0.72f), from, s.length(), 0);
+        s.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#FFB74D")),
+                from, s.length(), 0);
+        usbButton.setText(s);
+    }
+
+    /**
+     * USB 를 그만 보고 해제한다. 앱이 직접 해제하지 못하면(보통 그렇다) 시스템 저장공간
+     * 화면을 열고, 돌아왔을 때 정말 해제됐는지 보고 알린다 — 확인 없이 "뽑아도 된다"고
+     * 하지 않는다.
+     */
+    private void releaseUsb() {
+        final Uri tree = usbTree;
+        usbLoadSeq++;            // 읽던 목록은 버린다
+        usbMode = false;
+        openFolder = null;
+        reload();
+        if (!UsbLibrary.removable(tree)) return;
+        new Thread(new Runnable() {
+            @Override public void run() {
+                final boolean there = UsbLibrary.attached(MainActivity.this, tree);
+                final boolean gone = !there || UsbLibrary.eject(MainActivity.this, tree);
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (isFinishing()) return;
+                        if (!there) toastLong(R.string.usb_not_attached);
+                        else if (gone) toastLong(R.string.usb_released);
+                        else releaseInSettings(tree);
+                    }
+                });
+            }
+        }, "usb-release").start();
+    }
+
+    private void releaseInSettings(Uri tree) {
+        usbReleasing = tree;
+        toastLong(R.string.usb_release_in_settings);
+        for (String action : new String[]{
+                android.provider.Settings.ACTION_INTERNAL_STORAGE_SETTINGS,
+                android.provider.Settings.ACTION_SETTINGS}) {
+            try {
+                startActivity(new Intent(action));
+                return;
+            } catch (Exception ignored) { }
+        }
+    }
+
+    /** 시스템 화면에서 돌아왔다: 해제됐는지 보고 알린다. */
+    private void checkUsbReleased() {
+        final Uri tree = usbReleasing;
+        if (tree == null) return;
+        usbReleasing = null;
+        new Thread(new Runnable() {
+            @Override public void run() {
+                final boolean there = UsbLibrary.attached(MainActivity.this, tree);
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if (!isFinishing()) {
+                            toastLong(there ? R.string.usb_still_attached : R.string.usb_released);
+                        }
+                    }
+                });
+            }
+        }, "usb-check").start();
+    }
+
+    private void toastLong(int text) {
+        Toast.makeText(this, text, Toast.LENGTH_LONG).show();
     }
 
     @Override

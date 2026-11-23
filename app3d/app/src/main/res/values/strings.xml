@@ -147,5 +147,10 @@
     <string name="usb_pick_hint">Choose the USB drive (or a folder on it) and tap “Use this folder”. Long-press USB to pick another one later.</string>
     <string name="usb_no_access">No access to the USB drive. Plug it in and pick it again.</string>
     <string name="usb_root">USB</string>
+    <string name="usb_again_release">Again: eject</string>
+    <string name="usb_released">The USB drive is ejected. You can unplug it now.</string>
+    <string name="usb_release_in_settings">Apps cannot eject it themselves, so the storage screen opens. Tap Unmount for the USB drive, then come back.</string>
+    <string name="usb_still_attached">The USB drive is still mounted. Unmount it before unplugging.</string>
+    <string name="usb_not_attached">No USB drive is connected.</string>
     <string name="usb_empty">No videos or photos here.</string>
 </resources>
