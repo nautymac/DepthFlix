@@ -1013,15 +1013,30 @@ public class MainActivity extends Activity {
     private void openUsb(boolean repick) {
         Uri tree = repick ? null : UsbLibrary.savedTree(this);
         if (tree == null) {
-            Toast.makeText(this, R.string.usb_pick_hint, Toast.LENGTH_LONG).show();
-            try {
-                startActivityForResult(UsbLibrary.pickIntent(this), REQ_USB);
-            } catch (Exception e) {
-                Toast.makeText(this, R.string.usb_no_access, Toast.LENGTH_LONG).show();
+            if (repick) {
+                Toast.makeText(this, R.string.usb_pick_hint, Toast.LENGTH_LONG).show();
+                pickUsb();
+                return;
             }
+            // 처음 한 번은 안드로이드의 허락 창(파일 선택 화면)을 거쳐야 한다. 그 창이 무엇인지
+            // 모르면 USB 를 눌렀는데 엉뚱한 파일 앱이 열린 것처럼 보이므로 먼저 알린다.
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.usb_first_title)
+                    .setMessage(R.string.usb_first_msg)
+                    .setPositiveButton(R.string.usb_first_go, (d, w) -> pickUsb())
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
             return;
         }
         enterUsb(tree);
+    }
+
+    private void pickUsb() {
+        try {
+            startActivityForResult(UsbLibrary.pickIntent(this), REQ_USB);
+        } catch (Exception e) {
+            Toast.makeText(this, R.string.usb_no_access, Toast.LENGTH_LONG).show();
+        }
     }
 
     private void enterUsb(Uri tree) {
@@ -1031,6 +1046,8 @@ public class MainActivity extends Activity {
         usbMode = true;
         usbEnteredAt = android.os.SystemClock.elapsedRealtime();
         reload();
+        // 지금 USB 를 보고 있다는 것과 빼는 법을 처음에 알린다 (경로 줄에도 늘 적혀 있다).
+        if (UsbLibrary.removable(tree)) toastLong(R.string.usb_entered);
     }
 
     // ---- USB 해제 ----
@@ -1295,6 +1312,8 @@ public class MainActivity extends Activity {
             if (where.length() > 0) where.append('/');
             where.append(p[1]);
         }
+        // 경로 줄 끝에 빼는 법을 붙여 둔다: 버튼의 작은 둘째 줄만으로는 눈에 잘 안 띈다.
+        if (UsbLibrary.removable(tree)) where.append("   ·   ").append(getString(R.string.usb_crumb_release));
         final String crumbText = where.toString();
         crumb.setText(getString(R.string.crumb_in_folder, crumbText, 0));
         new Thread(new Runnable() {
