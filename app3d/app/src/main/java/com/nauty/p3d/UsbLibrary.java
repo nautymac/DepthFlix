@@ -124,25 +124,20 @@ public final class UsbLibrary {
     }
 
     /**
-     * 드라이브를 해제해 달라고 시스템에 부탁한다. UI 스레드에서 부르지 말 것.
+     * 이 드라이브를 해제할 수 있는 화면. 앱은 볼륨을 직접 해제할 수 없다 — 권한
+     * (MOUNT_UNMOUNT_FILESYSTEMS)이 시스템 앱 것이고, 공개된 길인 ejectRoot 도 S25 Ultra
+     * 에서 권한 거부로 확인했다. 설정의 저장공간 화면은 삼성에서 해제 메뉴가 없는 곳(내 파일
+     * 저장공간 관리)으로 넘어가므로, 내 파일의 그 USB 화면을 바로 연다 (⋮ 에 마운트 해제).
      *
-     * 볼륨을 직접 해제하는 권한(MOUNT_UNMOUNT_FILESYSTEMS)은 시스템 앱에만 있고, 공개된
-     * 길인 ejectRoot 도 사용자가 허락한 폴더 권한만으로는 거절되는 것이 보통이다. 그래서
-     * 결과를 믿지 않고 {@link #attached} 로 다시 본다.
-     *
-     * @return 정말로 해제됐는가
+     * @return 열 수 없는 폰(내 파일이 없음)이면 null
      */
-    public static boolean eject(Context ctx, Uri tree) {
+    public static Intent myFilesIntent(Context ctx, Uri tree) {
         String volume = volumeOf(tree);
-        if (volume == null || Build.VERSION.SDK_INT < 26) return false;
-        try {
-            DocumentsContract.ejectRoot(ctx.getContentResolver(),
-                    DocumentsContract.buildRootUri(EXTERNAL, volume));
-        } catch (Exception e) {
-            android.util.Log.i("P3D", "USB 해제 거절: " + e);
-            return false;
-        }
-        return !attached(ctx, tree);
+        if (volume == null) return null;
+        Intent i = new Intent("samsung.myfiles.intent.action.LAUNCH_MY_FILES");
+        i.setPackage("com.sec.android.app.myfiles");
+        i.putExtra("samsung.myfiles.intent.extra.START_PATH", "/mnt/media_rw/" + volume);
+        return i.resolveActivity(ctx.getPackageManager()) == null ? null : i;
     }
 
     public static String rootDocId(Uri tree) {

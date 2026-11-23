@@ -1046,9 +1046,9 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * USB 를 그만 보고 해제한다. 앱이 직접 해제하지 못하면(보통 그렇다) 시스템 저장공간
-     * 화면을 열고, 돌아왔을 때 정말 해제됐는지 보고 알린다 — 확인 없이 "뽑아도 된다"고
-     * 하지 않는다.
+     * USB 를 그만 보고, 해제할 수 있는 시스템 화면을 연다 (앱은 직접 해제할 수 없다 —
+     * UsbLibrary.myFilesIntent). 돌아왔을 때 정말 해제됐는지 보고 알린다 — 확인 없이
+     * "뽑아도 된다"고 하지 않는다.
      */
     private void releaseUsb() {
         final Uri tree = usbTree;
@@ -1060,30 +1060,31 @@ public class MainActivity extends Activity {
         new Thread(new Runnable() {
             @Override public void run() {
                 final boolean there = UsbLibrary.attached(MainActivity.this, tree);
-                final boolean gone = !there || UsbLibrary.eject(MainActivity.this, tree);
                 runOnUiThread(new Runnable() {
                     @Override public void run() {
                         if (isFinishing()) return;
-                        if (!there) toastLong(R.string.usb_not_attached);
-                        else if (gone) toastLong(R.string.usb_released);
-                        else releaseInSettings(tree);
+                        if (there) openReleaseScreen(tree);
+                        else toastLong(R.string.usb_not_attached);
                     }
                 });
             }
         }, "usb-release").start();
     }
 
-    private void releaseInSettings(Uri tree) {
+    private void openReleaseScreen(Uri tree) {
         usbReleasing = tree;
-        toastLong(R.string.usb_release_in_settings);
-        for (String action : new String[]{
-                android.provider.Settings.ACTION_INTERNAL_STORAGE_SETTINGS,
-                android.provider.Settings.ACTION_SETTINGS}) {
+        Intent files = UsbLibrary.myFilesIntent(this, tree);
+        if (files != null) {
             try {
-                startActivity(new Intent(action));
+                startActivity(files);
+                toastLong(R.string.usb_release_in_files);
                 return;
             } catch (Exception ignored) { }
         }
+        try {
+            startActivity(new Intent(android.provider.Settings.ACTION_INTERNAL_STORAGE_SETTINGS));
+        } catch (Exception ignored) { }
+        toastLong(R.string.usb_release_in_settings);
     }
 
     /** 시스템 화면에서 돌아왔다: 해제됐는지 보고 알린다. */
